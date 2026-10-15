@@ -26,7 +26,26 @@ avisa isso na tela antes de devolver o controle.
 
 ## Instalação
 
-Requer **Python 3.10+** e **Google Chrome** instalados no Windows.
+**Recomendado:** rode o `Instalar Automacao SIGEF-SEI <versão>.exe`
+(gerado por `python instalador/construir.py`, ver
+[`instalador/CONSTRUIR.md`](instalador/CONSTRUIR.md)). Instala sem senha de
+administrador e sem Python, cria atalho no Menu Iniciar e abre o programa
+numa **janela própria**, com botões e campos no lugar da tela preta. Os
+documentos baixados ficam em `Documentos\Automacao SIGEF-SEI`.
+
+A partir do código, a mesma janela abre com `python app_janela.py`.
+
+### Pelo código
+
+Requer apenas o **Google Chrome** instalado no Windows.
+
+Dois cliques em **`AUTOMACAO SIGEF-SEI.exe`** e pronto: ele procura o
+Python da máquina (e oferece baixar uma cópia própria, sem instalação e
+sem senha de administrador, se não houver nenhum), instala o que falta do
+`requirements.txt` e chama o `main.py`. Da segunda vez em diante o passo
+de preparação é pulado inteiro. Detalhes em [`lancador/COMPILAR.md`](lancador/COMPILAR.md).
+
+Pela linha de comando, com **Python 3.10+** já instalado:
 
 ```bash
 python -m pip install -r requirements.txt
@@ -42,8 +61,9 @@ navegador próprio do Playwright.
 python main.py
 ```
 
-Ou dois cliques em **`INICIAR.bat`**, que é o caminho pensado para quem
-não usa terminal.
+Ou dois cliques em **`AUTOMACAO SIGEF-SEI.exe`**, que é o caminho pensado
+para quem não usa terminal. O `INICIAR.bat` continua funcionando, mas
+exige o ambiente já pronto.
 
 O programa abre sozinho uma janela nova do Chrome — separada da do dia a
 dia, com perfil próprio em `C:\ChromeAutomacao` — já com as abas do SIGEF
@@ -60,15 +80,42 @@ A pontuação é opcional: o programa formata. Ao terminar um processo, ele
 pergunta se há outra OB — respondendo sim, recomeça no mesmo navegador,
 sem refazer o login.
 
+### Várias OBs de uma vez (modo lote)
+
+Na janela, aba **Vários processos**: uma planilha (`.xlsx`/`.csv`) ou uma
+lista colada, com uma OB por linha (processo, OB e, opcionalmente, o tipo
+da OB). A ordem das colunas e o cabeçalho não importam; o programa mostra
+o que entendeu de cada linha antes de começar e deixa de fora as
+inválidas e as repetidas.
+
+Pela linha de comando:
+
+```bash
+python main.py lista.xlsx
+```
+
+Os processos rodam um atrás do outro, sem pausa para conferência — ela é
+feita uma vez, no fim, com a lista do que foi feito. Uma falha espera
+30 s e tenta de novo, continuando de onde parou; se persistir, o item fica
+como erro e o lote segue. OB já anexada numa rodada anterior é anexada de
+novo, com aviso na conferência para excluir o que ficar em dobro. Cada lote
+grava um relatório `.csv` em `lotes/`. Detalhes em `lote.py`.
+
 ## Estrutura
 
 ```
+AUTOMACAO SIGEF-SEI.exe  porta de entrada: prepara o ambiente e roda o main.py
+app_janela.py            a mesma automação numa janela (pywebview), em vez do console
+interface/               o layout da janela: index.html, estilo.css, app.js
+instalador/              PyInstaller + Inno Setup: gera o Setup.exe
 main.py                  ponto de entrada: menus, perguntas, ordem das etapas
+lote.py                  modo lote: lê a planilha/lista e roda as OBs em sequência
 preparar_navegador.py    abre o Chrome em modo de depuração e aguarda o login
 etapa_listar_baixar.py   baixa os documentos do SIGEF  (baixar_documentos)
 etapa_sei2.py            anexa os documentos no SEI    (executar_sei2)
 requirements.txt         dependências
-INICIAR.bat              atalho de duplo clique
+lancador/                código-fonte (C) do executável + como recompilar
+INICIAR.bat              atalho antigo, sem preparação de ambiente
 LEIA-ME.txt              manual de uso, sem jargão
 ```
 
@@ -124,6 +171,7 @@ comportamento.
 ## Aviso
 
 Este repositório contém **apenas código**. Documentos baixados, o arquivo
-de sessão e as pastas de processo são ignorados pelo `.gitignore` e nunca
+de sessão e as pastas de processo ficam em `Documentos\Automacao SIGEF-SEI`
+(rodando pelo código ou instalado), fora desta pasta, e são ignorados pelo `.gitignore` e nunca
 devem ser versionados: carregam números de processo, valores e caminhos
 com o login de quem executou.

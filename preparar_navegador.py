@@ -17,14 +17,21 @@ a tela aberta aqui -- os dois abrem a página inicial do sistema. Qualquer
 verificação automática olharia para uma tela diferente da esperada e
 diria "você não entrou" com a pessoa logada do lado.
 
-Guarda também os endereços dos dois sistemas (URL_SIGEF_LISTAR_OB e
-URL_SEI), porque é este arquivo que abre as abas, e o aviso de
-conferência que a etapa do SEI mostra no fim.
+A aba do SIGEF abre primeiro no PORTAL de login (URL_SIGEF_PORTAL), não
+direto na tela de "Listar Ordem Bancária": entrar direto nela sem sessão
+ativa faz o SIGEF mostrar um alerta de "sessão expirada" que, ao clicar
+OK, fecha a aba sozinha. Só depois que o usuário confirma o login é que
+a mesma aba é redirecionada para URL_SIGEF_LISTAR_OB.
+
+Guarda também os endereços dos dois sistemas (URL_SIGEF_PORTAL,
+URL_SIGEF_LISTAR_OB e URL_SEI), porque é este arquivo que abre as abas,
+e o aviso de conferência que a etapa do SEI mostra no fim.
 
 Rodando direto (`python preparar_navegador.py`), testa só esta parte,
 sem baixar nada. O programa completo é o main.py.
 """
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -67,6 +74,13 @@ CAMINHOS_CHROME_POSSIVEIS = [
 
 # ⚠️ Ambiente de PRODUÇÃO. Para testar sem afetar dados reais, troque o
 # domínio por "sigefhom.sefin.ro.gov.br".
+
+# Portal de login do SIGEF. É NELE que a aba do SIGEF abre primeiro --
+# ver explicação no topo do arquivo.
+URL_SIGEF_PORTAL = "http://sigef.sefin.ro.gov.br/SIGEF/SIGEFPortal.html"
+
+# Tela de destino, pra onde a aba do SIGEF é redirecionada DEPOIS que o
+# usuário confirma que já entrou.
 URL_SIGEF_LISTAR_OB = (
     "http://sigef.sefin.ro.gov.br/SIGEF2026/FIN/"
     "FINListarOrdemBancaria.aspx?CdTransacao=175"
@@ -74,9 +88,17 @@ URL_SIGEF_LISTAR_OB = (
 
 URL_SEI = "https://sei.sistemas.ro.gov.br/sei/controlador.php?acao=procedimento_controlar"
 
+# Portal do Banco do Brasil (módulo BB): a entrada com chave J de governo,
+# a mesma que o programa BB abria (URLS_ABERTURA em modulos/automacoes_bb.py).
+URL_BB_LOGIN = (
+    "https://autoatendimento2.bb.com.br/apf-apj-acesso/index.html"
+    "?ambiente=WEB_PESSOA_JURIDICA_CHAVEJ_GOVERNO&segmento=est#/transacao/acesso-apj/1"
+)
+
 # Identificam cada site, para reaproveitar uma aba já aberta.
 DOMINIO_SIGEF = "sigef.sefin.ro.gov.br"
 DOMINIO_SEI = "sei.sistemas.ro.gov.br"
+DOMINIO_BB = "bb.com.br"   # autoatendimento, autoatendimento2...: qualquer host do BB
 
 
 # ===================== Conversa com o usuário (tela preta) =====================
@@ -189,6 +211,44 @@ def _esperar_chrome_responder(playwright, porta: int, segundos: int):
     return None
 
 
+def _tratador_dialogo(dialog) -> None:
+    """
+    Fecha sozinho qualquer alert/confirm/prompt do navegador, em
+    qualquer aba.
+
+    Sem isso, um alert() do SIGEF (ex: "sua sessão expirou, é necessário
+    uma nova autenticação!") fica sem resposta e o DRIVER do Playwright
+    quebra sozinho tentando lidar com ele fora de hora -- um erro tipo
+    "ProtocolError: No dialog is showing" que derruba o programa inteiro
+    de um jeito difícil de entender, mesmo a automação não tendo feito
+    nada de errado. Aceitando o diálogo aqui, na hora que ele aparece,
+    isso nunca chega a acontecer.
+    """
+    try:
+        print(f"\n💬 Diálogo do navegador fechado sozinho: [{dialog.type}] {dialog.message}")
+    except Exception:
+        pass
+    try:
+        dialog.accept()
+    except PlaywrightError:
+        pass
+
+
+def instalar_tratador_dialogos(context) -> None:
+    """
+    Liga _tratador_dialogo() em TODAS as abas deste navegador -- as que
+    já estão abertas agora e as que ainda vão abrir (os popups de
+    "Selecione o tipo de arquivo" de cada Imprimir, por exemplo).
+
+    Chamar uma vez só, logo que o `context` estiver pronto -- o
+    listener em `context.on("page", ...)` cobre o resto sozinho pelo
+    resto da conexão.
+    """
+    for pagina in context.pages:
+        pagina.on("dialog", _tratador_dialogo)
+    context.on("page", lambda pagina: pagina.on("dialog", _tratador_dialogo))
+
+
 def conectar_chrome(porta: int = PORTA_PADRAO, timeout_ms: int = 60000):
     """
     Conecta no Chrome da automação, abrindo-o se ninguém estiver na porta.
@@ -200,7 +260,7 @@ def conectar_chrome(porta: int = PORTA_PADRAO, timeout_ms: int = 60000):
 
     if not porta_ja_esta_em_uso(porta):
         print("🌐 Abrindo o navegador da automação...")
-        abrir_chrome_debug(porta, urls=[URL_SIGEF_LISTAR_OB, URL_SEI])
+        abrir_chrome_debug(porta, urls=[URL_SIGEF_PORTAL, URL_SEI])
         time.sleep(3)
     else:
         print("🌐 O navegador da automação já estava aberto -- reaproveitando.")
@@ -224,28 +284,108 @@ def conectar_chrome(porta: int = PORTA_PADRAO, timeout_ms: int = 60000):
     else:
         context = browser.new_context()
 
+    instalar_tratador_dialogos(context)
+
     return playwright, browser, context
 
 
 # ===================== Abrir as abas do SIGEF e do SEI =====================
 
 
+def _url_e_raiz_do_dominio(url: str, dominio: str) -> bool:
+    """
+    True se `url` for só a raiz do domínio (ex: 'http://sigef.sefin.ro.gov.br/',
+    com ou sem a barra final), sem nenhum caminho ou parâmetro depois dela.
+
+    É o sinal de que a navegação NÃO chegou onde devia: o SIGEF, às
+    vezes, abre a aba (ou o Chrome recebe a URL pela linha de comando)
+    e fica parado bem na raiz do site, sem redirecionar sozinho nem pra
+    tela de login nem pro endereço que foi pedido.
+    """
+    if not url or dominio.lower() not in url.lower():
+        return False
+    resto = re.sub(r"^https?://", "", url.strip(), flags=re.IGNORECASE)
+    if not resto.lower().startswith(dominio.lower()):
+        return False
+    resto = resto[len(dominio):]
+    return resto in ("", "/")
+
+
+def _garantir_url_certa(aba, dominio: str, url: str, apelido: str, tentativas: int = 3) -> None:
+    """
+    Confere se a aba não ficou parada na RAIZ do domínio (ver
+    _url_e_raiz_do_dominio) e, se ficou, navega de novo pro endereço
+    pedido -- até `tentativas` vezes, com uma pausa curta entre elas.
+
+    Sem isso, a aba fica "no lugar errado" (a raiz do site, sem nada
+    reconhecível) e o usuário não sabe onde entrar com usuário e senha.
+    """
+    for tentativa in range(1, tentativas + 1):
+        try:
+            aba.wait_for_load_state("networkidle", timeout=5000)
+        except PlaywrightTimeoutError:
+            pass
+        except PlaywrightError:
+            pass
+
+        url_atual = ""
+        try:
+            url_atual = aba.url or ""
+        except PlaywrightError:
+            pass
+
+        if not _url_e_raiz_do_dominio(url_atual, dominio):
+            return
+
+        print(
+            f"   ↩️  A aba do {apelido} abriu só na raiz do site "
+            f"({url_atual}), sem redirecionar -- navegando de novo "
+            f"({tentativa}/{tentativas})..."
+        )
+        try:
+            aba.goto(url, timeout=30000)
+        except PlaywrightTimeoutError:
+            pass
+        except PlaywrightError:
+            pass
+        aba.wait_for_timeout(1000)
+
+    # Não trava a preparação por causa disso -- só avisa. Pode ser só a
+    # tela de login mesmo, e quem confere é o usuário, na pergunta que
+    # vem a seguir.
+    try:
+        url_atual = aba.url or ""
+    except PlaywrightError:
+        url_atual = ""
+    if _url_e_raiz_do_dominio(url_atual, dominio):
+        print(
+            f"   ⚠️  A aba do {apelido} continua na raiz do site "
+            f"({url_atual}) mesmo depois de tentar de novo. Pode ser só "
+            "a tela de login dele -- confira na tela antes de confirmar."
+        )
+
+
 def abrir_ou_reusar_aba(context, dominio: str, url: str, apelido: str):
     """Reaproveita a aba do site, ou abre uma. Nunca duplica."""
+    aba = None
     for pagina in context.pages:
         try:
             if dominio.lower() in (pagina.url or "").lower():
                 print(f"   ✔️  Aba do {apelido} já estava aberta.")
-                return pagina
+                aba = pagina
+                break
         except PlaywrightError:
             continue
 
-    print(f"   ➕ Abrindo o {apelido}...")
-    aba = context.new_page()
-    try:
-        aba.goto(url, timeout=60000)
-    except PlaywrightTimeoutError:
-        print(f"   ⚠️  O {apelido} está demorando pra carregar -- siga assim mesmo.")
+    if aba is None:
+        print(f"   ➕ Abrindo o {apelido}...")
+        aba = context.new_page()
+        try:
+            aba.goto(url, timeout=60000)
+        except PlaywrightTimeoutError:
+            print(f"   ⚠️  O {apelido} está demorando pra carregar -- siga assim mesmo.")
+
+    _garantir_url_certa(aba, dominio, url, apelido)
     return aba
 
 
@@ -389,7 +529,7 @@ def preparar_navegador(porta: int = PORTA_PADRAO):
 
     print()
     print("Conferindo as abas dos dois sistemas:")
-    aba_sigef = abrir_ou_reusar_aba(context, DOMINIO_SIGEF, URL_SIGEF_LISTAR_OB, "SIGEF")
+    aba_sigef = abrir_ou_reusar_aba(context, DOMINIO_SIGEF, URL_SIGEF_PORTAL, "SIGEF")
     aba_sei = abrir_ou_reusar_aba(context, DOMINIO_SEI, URL_SEI, "SEI")
 
     try:
@@ -451,6 +591,16 @@ def preparar_navegador(porta: int = PORTA_PADRAO):
         print()
         print("       Depois de digitar, aperte a tecla ENTER.")
 
+    print()
+    print("🔁 Redirecionando a aba do SIGEF para a tela de Ordem Bancária...")
+    try:
+        aba_sigef.goto(URL_SIGEF_LISTAR_OB, timeout=60000)
+    except PlaywrightTimeoutError:
+        print("   ⚠️  A tela está demorando pra carregar -- seguindo assim mesmo.")
+    except PlaywrightError:
+        pass
+    _garantir_url_certa(aba_sigef, DOMINIO_SIGEF, URL_SIGEF_LISTAR_OB, "SIGEF")
+
     _caixa(
         [
             "TUDO CERTO! PODE DEIXAR O RESTO COMIGO.",
@@ -462,10 +612,13 @@ def preparar_navegador(porta: int = PORTA_PADRAO):
     return playwright, browser, context, aba_sigef, aba_sei
 
 
-def aviso_conferencia_final(processo: str = "") -> None:
+def aviso_conferencia_final(processo: str = "", avisos=()) -> None:
     """
     Aviso mostrado depois de anexar e ANTES de o usuário assinar ou
     mandar para bloco de assinatura.
+
+    `avisos` são pendências desta rodada que só a pessoa resolve -- hoje,
+    documento vazio que sobrou de uma tentativa que caiu (etapa_sei2).
 
     A automação transporta documentos, não confere nada: ordem, gerência
     e processo seguem sendo responsabilidade de quem opera. Dizer isso na
@@ -480,6 +633,13 @@ def aviso_conferencia_final(processo: str = "") -> None:
 
     if processo:
         print(f"Processo: {processo}")
+        print()
+
+    if avisos:
+        print("ATENÇÃO -- RESOLVA ANTES DE ASSINAR:")
+        print()
+        for aviso in avisos:
+            print(f"   ⚠️  {aviso}")
         print()
 
     print("Antes de salvar, ordenar os documentos na árvore do processo")

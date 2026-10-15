@@ -38,7 +38,8 @@ if not defined PYTHON (
     goto FIM
 )
 
-%PYTHON% main.py
+REM Uma planilha arrastada sobre este arquivo chega em %* -- modo lote.
+%PYTHON% main.py %*
 if errorlevel 1 (
     echo.
     echo   --------------------------------------------------------------

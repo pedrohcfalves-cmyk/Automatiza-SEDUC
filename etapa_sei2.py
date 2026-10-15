@@ -3,15 +3,22 @@ Anexa no processo do SEI os documentos baixados do SIGEF.
 
 Função principal:
 
-    executar_sei2(context, processo, dados=None) -> aba do SEI
+    executar_sei2(context, processo, dados=None, tipo_ob=None) -> aba do SEI
 
 Inclui um documento de cada tipo, nesta ordem:
 
-    CE (Despesa Certificada)              1 no lote
+    CE (Despesa Certificada)              1 por CE DISTINTA baixada no
+                                          lote (mesmo estilo da NL e da
+                                          PP: uma PP pode repetir a CE
+                                          de outra, mas o documento só
+                                          entra uma vez no processo)
     NL (Nota de Lançamento)               1 por PP
     PP (Preparação de Pagamento)          1 por PP, com o número da PP
                                           preenchido em #txtNumero
-    OB (Ordem Bancária de Regularização)  1 no lote
+    OB (Ordem Bancária)                   1 no lote -- como "OB - Ordem
+                                          Bancária de Regularização" ou
+                                          "OB - Ordem Bancária", conforme
+                                          `tipo_ob` (ver TEXTO_LINK_OB_*)
 
 Todos com Nível de Acesso Restrito e hipótese legal "Documento
 Preparatório", com as imagens coladas no corpo do texto.
@@ -37,10 +44,13 @@ Ponto de entrada do programa: main.py. Rodando este arquivo direto, ele
 anexa um processo já baixado, sem repetir o download.
 """
 import glob
+import json
+import math
 import os
 import re
 import tempfile
 import time
+import unicodedata
 
 from playwright.sync_api import Error as PlaywrightError, TimeoutError as PlaywrightTimeoutError
 
@@ -59,6 +69,55 @@ from etapa_listar_baixar import (
 # em ordem de prioridade. None = aba_sei direto; qualquer outro valor é
 # o nome (name=) de um frame.
 CANDIDATOS_FRAMES = ("ifrVisualizacao", "ifrConteudoVisualizacao", "ifrArvore", "ifrPasta", None)
+
+# Timeouts BEM GRANDES de propósito, maiores que os "normais" (5s) do
+# resto do arquivo -- usados só nos pontos mais sensíveis à
+# instabilidade do SEI: achar o iframe do editor (CKEditor) recém-aberto
+# e o diálogo "Imagem" onde a imagem é colada. Se o SEI estiver lento, é
+# melhor esperar do que quebrar a automação achando que o elemento não
+# existe.
+#
+# NÃO existe (de propósito) uma espera separada por "o modelo padrão do
+# documento terminou de montar": uma tentativa nesse sentido (conferir
+# se um texto do modelo já aparecia no corpo) passava rápido demais --
+# o texto estático já está no HTML antes do CKEditor terminar de
+# inicializar de verdade -- e isso fazia o Ctrl+A + Delete e a colagem
+# rodarem cedo demais, resultando em documento salvo SEM a imagem.
+# achar o <body contenteditable="true"> (via _encontrar_frame_editor)
+# já é sinal suficiente de que dá pra continuar.
+TIMEOUT_EDITOR_CARREGAR_MS = 90000
+TIMEOUT_DIALOGO_IMAGEM_MS = 60000
+
+# Os DOIS tipos de documento que podem representar a OB no SEI -- o
+# usuário escolhe qual usar (ver perguntar_tipo_ob() no main.py); o
+# resto do fluxo da OB (baixar do SIGEF, colar a imagem, salvar,
+# confirmar) é idêntico pros dois, só muda qual link é clicado em
+# "Incluir Documento". main.py importa estas duas constantes pra
+# garantir que o texto que ele pergunta/grava bate exatamente com o
+# texto que _incluir_documento() procura na tela.
+TEXTO_LINK_OB_REGULARIZACAO = "OB - Ordem Bancária de Regularização"
+TEXTO_LINK_OB_NORMAL = "OB - Ordem Bancária"
+
+# Limite do DOCUMENTO INTEIRO no SEI. O SEI recusa ao salvar um
+# documento com imagem acima de 2 MB ("documento com imagem não pode
+# exceder 2MB. Utilize a opção Documento Externo") -- e o limite é a
+# soma de TODAS as imagens em base64 no HTML, não por imagem. Cada
+# página já vem limitada a 250 KB de arquivo (~335 KB em base64, ver
+# _preparar_imagem_para_insercao), então 6 ou mais páginas podem passar
+# de 2 MB. Quando a estimativa passa deste limite, o documento é
+# DIVIDIDO em partes (ver _planejar_partes) -- a qualidade das imagens
+# NÃO é reduzida para caber.
+#
+# 1.800.000 deixa uma folga abaixo dos 2 MB do SEI. É uma estimativa:
+# se o SEI recusar um documento que o programa achou que cabia,
+# diminua este número; se dividir documentos que cabiam, aumente.
+LIMITE_DOCUMENTO_BYTES = 1_800_000
+
+# Folgas da estimativa, somadas ao base64 das imagens: o HTML em volta
+# de cada imagem (tag <img> com largura/estilo e o <p>) e o resto do
+# documento (cabeçalho e o que mais o modelo do SEI tiver).
+FOLGA_HTML_POR_IMAGEM_BYTES = 400
+FOLGA_HTML_DOCUMENTO_BYTES = 20_000
 
 
 # ==== Helpers genéricos (frames, rede) ====
@@ -130,6 +189,10 @@ def _encontrar_frame_editor(pagina_editor, timeout: int = 5000):
     return None
 
 
+
+
+
+
 # ==== Localização de arquivos por tipo de documento (CE, NL, PP, OB) ====
 
 
@@ -146,32 +209,30 @@ def _localizar_arquivos_por_prefixo(
     return sorted(glob.glob(padrao))
 
 
-def _localizar_arquivos_ce(processo: str, pasta_base: str = PASTA_BASE) -> list[str]:
-    return _localizar_arquivos_por_prefixo(processo, "Despesa Certificada", pasta_base)
-
-
 def _localizar_arquivos_ob(processo: str, pasta_base: str = PASTA_BASE) -> list[str]:
     return _localizar_arquivos_por_prefixo(processo, "Ordem Bancária", pasta_base)
 
 
-def _localizar_grupos_arquivos_por_pp(
-    processo: str, prefixo_nome_arquivo: str, pasta_base: str = PASTA_BASE
+def _localizar_grupos_arquivos_por_chave(
+    processo: str, prefixo_nome_arquivo: str, rotulo_chave: str, pasta_base: str = PASTA_BASE
 ) -> list[tuple[str, list[str]]]:
     """
-    Agrupa os arquivos "{prefixo_nome_arquivo} - PP {pp}*.jpg" já
-    baixados pra esse processo por PP -- ao contrário da CE (uma só pro
-    processo inteiro), cada PP tem seu PRÓPRIO documento (NL ou PP),
-    que vira um documento separado no SEI. Páginas de um mesmo
-    documento ("..._1.jpg", "..._2.jpg") ficam juntas no mesmo grupo,
-    em ordem.
+    Agrupa os arquivos "{prefixo_nome_arquivo} - {rotulo_chave} {chave}*.jpg"
+    já baixados pra esse processo, por `chave` -- a PP (NL, PP) ou o
+    número da CE (Despesa Certificada). Cada chave tem seu PRÓPRIO
+    documento, que vira um documento separado no SEI; duas PPs com a
+    MESMA chave de CE caem no mesmo grupo (a CE só entra uma vez).
+    Páginas de um mesmo documento ("..._1.jpg", "..._2.jpg") ficam
+    juntas no mesmo grupo, em ordem.
 
-    Retorna uma lista de pares (identificador da PP, lista de
-    caminhos), ordenados pelo texto do identificador.
+    Retorna uma lista de pares (chave, lista de caminhos), ordenados
+    pelo texto da chave.
     """
     pasta_processo = os.path.join(pasta_base, nome_pasta_valido(processo))
-    padrao = os.path.join(pasta_processo, f"{prefixo_nome_arquivo} - PP *.jpg")
+    padrao = os.path.join(pasta_processo, f"{prefixo_nome_arquivo} - {rotulo_chave} *.jpg")
     padrao_nome = re.compile(
-        rf"^{re.escape(prefixo_nome_arquivo)} - PP (?P<pp>.+?)(?:_(?P<pagina>\d+))?\.jpg$"
+        rf"^{re.escape(prefixo_nome_arquivo)} - {re.escape(rotulo_chave)} "
+        rf"(?P<chave>.+?)(?:_(?P<pagina>\d+))?\.jpg$"
     )
 
     grupos: dict[str, list[tuple[int, str]]] = {}
@@ -179,22 +240,26 @@ def _localizar_grupos_arquivos_por_pp(
         casamento = padrao_nome.match(os.path.basename(caminho))
         if not casamento:
             continue
-        pp = casamento.group("pp")
+        chave = casamento.group("chave")
         pagina = int(casamento.group("pagina") or 1)
-        grupos.setdefault(pp, []).append((pagina, caminho))
+        grupos.setdefault(chave, []).append((pagina, caminho))
 
     return [
-        (pp, [caminho for _pagina, caminho in sorted(grupos[pp])])
-        for pp in sorted(grupos)
+        (chave, [caminho for _pagina, caminho in sorted(grupos[chave])])
+        for chave in sorted(grupos)
     ]
 
 
 def _localizar_grupos_arquivos_nl(processo: str, pasta_base: str = PASTA_BASE) -> list[tuple[str, list[str]]]:
-    return _localizar_grupos_arquivos_por_pp(processo, "Nota de Lançamento", pasta_base)
+    return _localizar_grupos_arquivos_por_chave(processo, "Nota de Lançamento", "PP", pasta_base)
 
 
 def _localizar_grupos_arquivos_pp(processo: str, pasta_base: str = PASTA_BASE) -> list[tuple[str, list[str]]]:
-    return _localizar_grupos_arquivos_por_pp(processo, "Preparação de Pagamento", pasta_base)
+    return _localizar_grupos_arquivos_por_chave(processo, "Preparação de Pagamento", "PP", pasta_base)
+
+
+def _localizar_grupos_arquivos_ce(processo: str, pasta_base: str = PASTA_BASE) -> list[tuple[str, list[str]]]:
+    return _localizar_grupos_arquivos_por_chave(processo, "Despesa Certificada", "CE", pasta_base)
 
 
 # ==== De onde vêm os arquivos: a etapa_listar_baixar.py ====
@@ -225,7 +290,7 @@ def resolver_dados_da_etapa_anterior(processo: str, dados: dict = None, pasta_ba
     cada um pertence. Devolve sempre o mesmo formato:
 
         {
-          "arquivos_ce": [caminhos...],      # 1 documento no lote todo
+          "grupos_ce":  [(numero_ce, [caminhos...]), ...],  # 1 documento por CE distinta
           "arquivos_ob": [caminhos...],      # 1 documento no lote todo
           "grupos_nl":   [(pp, [caminhos...]), ...],   # 1 documento por PP
           "grupos_pp":   [(pp, [caminhos...]), ...],   # 1 documento por PP
@@ -236,13 +301,13 @@ def resolver_dados_da_etapa_anterior(processo: str, dados: dict = None, pasta_ba
     dados ganha:
 
       1. MEMÓRIA (`dados`): o dicionário que a etapa_listar_baixar.py
-         monta no passo 7 e passa direto pra cá quando as duas etapas
+         monta no passo 8 e passa direto pra cá quando as duas etapas
          rodam emendadas. Caminho normal.
       2. SESSÃO (sessao_atual.json): as mesmas chaves, gravadas pela
          etapa anterior. É o que vale quando esta etapa roda sozinha
          (`python etapa_sei2.py`) depois de um download já feito.
       3. PASTA (glob pelos nomes dos .jpg): último recurso, pra
-         sessões antigas (gravadas antes de arquivos_ce/arquivos_ob e
+         sessões antigas (gravadas antes de grupos_ce/arquivos_ob e
          de arquivos_nl/arquivos_pp existirem) e pro caso de alguém
          ter baixado os relatórios na mão.
 
@@ -265,12 +330,14 @@ def resolver_dados_da_etapa_anterior(processo: str, dados: dict = None, pasta_ba
             continue
 
         lancamentos = candidato.get("lancamentos") or []
+        grupos_ce_candidato = candidato.get("grupos_ce")
         tem_por_tipo = any(
-            item.get("arquivos_nl") or item.get("arquivos_pp") for item in lancamentos
+            item.get("arquivos_nl") or item.get("arquivos_pp") or item.get("arquivos_ce")
+            for item in lancamentos
         )
-        if not (candidato.get("arquivos_ce") or candidato.get("arquivos_ob") or tem_por_tipo):
+        if not (grupos_ce_candidato or candidato.get("arquivos_ob") or tem_por_tipo):
             # Formato antigo (só "arquivos_anexar" achatado): não dá pra
-            # saber qual arquivo é NL e qual é PP -- deixa pro glob.
+            # saber qual arquivo é de qual tipo -- deixa pro glob.
             continue
 
         grupos_nl = [
@@ -284,8 +351,39 @@ def resolver_dados_da_etapa_anterior(processo: str, dados: dict = None, pasta_ba
             if item.get("arquivos_pp")
         ]
 
+        # CE: o formato novo ("grupos_ce", montado pela etapa anterior)
+        # já vem com uma entrada por CE DISTINTA -- é só usar. Sessões
+        # de uma versão anterior (sem "grupos_ce") só têm o número e os
+        # arquivos soltos em cada lançamento; remonta os grupos daqui,
+        # descartando repetições pelo NÚMERO da CE (a mesma CE não pode
+        # virar dois documentos).
+        if grupos_ce_candidato:
+            grupos_ce_brutos = [(numero, arquivos) for numero, arquivos in grupos_ce_candidato]
+        else:
+            numeros_vistos = set()
+            grupos_ce_brutos = []
+            for item in lancamentos:
+                arquivos_item = item.get("arquivos_ce") or []
+                if not arquivos_item:
+                    continue
+                numero_ce = item.get("numero_ce")
+                if numero_ce and numero_ce in numeros_vistos:
+                    continue
+                if numero_ce:
+                    numeros_vistos.add(numero_ce)
+                grupos_ce_brutos.append((numero_ce, arquivos_item))
+
+        grupos_ce = [
+            (numero_ce, arquivos_existentes)
+            for numero_ce, arquivos_existentes in (
+                (numero_ce, _conferir_existem(arquivos, f"CE {numero_ce or '(sem número)'}"))
+                for numero_ce, arquivos in grupos_ce_brutos
+            )
+            if arquivos_existentes
+        ]
+
         return {
-            "arquivos_ce": _conferir_existem(candidato.get("arquivos_ce") or [], "CE"),
+            "grupos_ce": grupos_ce,
             "arquivos_ob": _conferir_existem(candidato.get("arquivos_ob") or [], "OB"),
             "grupos_nl": [(pp, arquivos) for pp, arquivos in grupos_nl if arquivos],
             "grupos_pp": [(pp, arquivos) for pp, arquivos in grupos_pp if arquivos],
@@ -294,7 +392,7 @@ def resolver_dados_da_etapa_anterior(processo: str, dados: dict = None, pasta_ba
 
     # ---- 3: último recurso, procura pelos nomes dos arquivos na pasta ----
     return {
-        "arquivos_ce": _localizar_arquivos_ce(processo, pasta_base),
+        "grupos_ce": _localizar_grupos_arquivos_ce(processo, pasta_base),
         "arquivos_ob": _localizar_arquivos_ob(processo, pasta_base),
         "grupos_nl": _localizar_grupos_arquivos_nl(processo, pasta_base),
         "grupos_pp": _localizar_grupos_arquivos_pp(processo, pasta_base),
@@ -370,20 +468,38 @@ def _preparar_imagem_para_insercao(caminho_arquivo: str, limite_bytes_arquivo: i
     return caminho_reduzido
 
 
-# A escada de redução é a mesma nas duas ferramentas: baixa a QUALIDADE
-# JPEG primeiro, de 5 em 5, e só começa a encolher a RESOLUÇÃO (10% por
-# vez) quando a qualidade já caiu bastante -- cortar qualidade demais
-# borra as bordas do texto na imagem mais do que reduzir um pouco o
-# tamanho.
+# A escada de redução é a mesma nas duas ferramentas. Ela troca
+# RESOLUÇÃO por QUALIDADE JPEG: a qualidade nunca desce de
+# _QUALIDADE_BOA enquanto der para encolher a imagem até
+# _ESCALA_MINIMA_BOA (≈ 110 dpi, ainda legível ampliada).
+#
+# Por quê: a página do SIGEF vem a 200 dpi (1653x2337). Para caber em
+# 250 KB nessa resolução, a NL caía para qualidade ~57, que deixa um
+# borrado em volta de cada letra. A 150 dpi (escala 0,75) a mesma NL
+# cabe com qualidade 85 e o texto fica limpo -- comparado lado a lado
+# com as imagens reais. Só se nem assim couber, volta à escada antiga
+# (qualidade menor e, por fim, resolução menor).
 _QUALIDADE_INICIAL = 92
+_QUALIDADE_BOA = 80
 _QUALIDADE_MINIMA = 35
 _PASSO_QUALIDADE = 5
 _FATOR_RESOLUCAO = 0.9
-_MAX_TENTATIVAS = 20
+_ESCALA_MINIMA_BOA = 0.55
+_MAX_TENTATIVAS = 40
 
 
 def _proximo_passo(qualidade: int, escala: float) -> tuple[int, float]:
-    """Um degrau da escada: primeiro qualidade, depois resolução."""
+    """
+    Um degrau da escada:
+      1. qualidade de 92 até 80, na resolução atual;
+      2. se não coube: encolhe 10% e volta para qualidade 90 (até a
+         escala mínima "boa");
+      3. passada ela: qualidade de 5 em 5 até 35, depois resolução.
+    """
+    if escala > _ESCALA_MINIMA_BOA:
+        if qualidade - _PASSO_QUALIDADE >= _QUALIDADE_BOA:
+            return qualidade - _PASSO_QUALIDADE, escala
+        return 90, escala * _FATOR_RESOLUCAO
     if qualidade > _QUALIDADE_MINIMA:
         return qualidade - _PASSO_QUALIDADE, escala
     return qualidade, escala * _FATOR_RESOLUCAO
@@ -465,6 +581,154 @@ def _reduzir_com_pymupdf(caminho_arquivo: str, caminho_saida: str, limite_bytes:
         qualidade, escala = _proximo_passo(qualidade, escala)
 
     return None
+
+
+# ==== Divisão em partes (limite de 2 MB por documento do SEI) ====
+
+
+def _dividir_em_partes(tamanhos: list[int], limite: int) -> list[list[int]]:
+    """
+    Divide as páginas de um documento em partes que caibam no `limite`.
+
+    Recebe o tamanho estimado (base64 + folga) de cada página, na ordem,
+    e devolve as partes como listas de ÍNDICES de página. Função pura:
+    não toca em disco nem no SEI.
+
+      - mantém a ordem, e cada parte é um bloco seguido de páginas --
+        nunca separa uma página;
+      - usa o MENOR número de partes possível e, entre as divisões com
+        esse número, a mais equilibrada (a maior parte fica o menor
+        possível): 8 páginas iguais viram 4+4, não 5+3 nem 7+1;
+      - se couber tudo, devolve uma parte só com todas as páginas;
+      - uma página que sozinha passa do limite fica sozinha numa parte
+        (não dá pra dividir mais) -- quem chama avisa;
+      - lista vazia devolve lista vazia. Mesmo resultado sempre (em
+        empate, as primeiras partes ficam com as páginas a mais).
+    """
+    quantidade = len(tamanhos)
+    if quantidade == 0:
+        return []
+
+    acumulado = [0]
+    for tamanho in tamanhos:
+        acumulado.append(acumulado[-1] + tamanho)
+
+    def soma(inicio: int, fim: int) -> int:
+        return acumulado[fim] - acumulado[inicio]
+
+    def cabe(inicio: int, fim: int) -> bool:
+        # Páginas inicio..fim-1. Uma página sozinha sempre "cabe": se
+        # ela passa do limite, não há como dividir mais.
+        return fim - inicio == 1 or soma(inicio, fim) <= limite
+
+    def peso(inicio: int, fim: int) -> int:
+        # A página grande demais que ficou sozinha não entra na conta do
+        # equilíbrio -- ela é forçada, e não deve desequilibrar as outras.
+        valor = soma(inicio, fim)
+        return valor if valor <= limite else 0
+
+    # 1) Menor número de partes: encher cada parte até não caber mais
+    #    dá sempre o mínimo, quando as partes são blocos seguidos.
+    qtd_partes, soma_atual, paginas_atuais = 1, 0, 0
+    for tamanho in tamanhos:
+        if paginas_atuais and soma_atual + tamanho > limite:
+            qtd_partes += 1
+            soma_atual, paginas_atuais = 0, 0
+        soma_atual += tamanho
+        paginas_atuais += 1
+
+    # 2) Com esse número de partes, a divisão mais equilibrada.
+    #    melhor[i][p] = menor "maior parte" possível dividindo as
+    #    páginas i.. em p partes (infinito se não dá).
+    infinito = float("inf")
+    melhor = [[infinito] * (qtd_partes + 1) for _ in range(quantidade + 1)]
+    melhor[quantidade][0] = 0
+    for inicio in range(quantidade - 1, -1, -1):
+        for partes in range(1, qtd_partes + 1):
+            for fim in range(inicio + 1, quantidade + 1):
+                if not cabe(inicio, fim):
+                    break  # mais páginas só aumentam a soma
+                resto = melhor[fim][partes - 1]
+                if resto == infinito:
+                    continue
+                melhor[inicio][partes] = min(melhor[inicio][partes], max(peso(inicio, fim), resto))
+
+    # Remonta da primeira parte para a última; em empate, a parte mais
+    # comprida primeiro (determinístico).
+    resultado, inicio = [], 0
+    for partes in range(qtd_partes, 0, -1):
+        alvo = melhor[inicio][partes]
+        for fim in range(quantidade - (partes - 1), inicio, -1):
+            resto = melhor[fim][partes - 1]
+            if cabe(inicio, fim) and resto != infinito and max(peso(inicio, fim), resto) == alvo:
+                break
+        resultado.append(list(range(inicio, fim)))
+        inicio = fim
+    return resultado
+
+
+def _em_mb(quantidade_bytes: int) -> str:
+    """1800000 -> "1,8" (para as mensagens)."""
+    return f"{quantidade_bytes / 1_000_000:.1f}".replace(".", ",")
+
+
+def _tamanho_estimado_imagem(caminho: str) -> int:
+    """Quanto a imagem ocupa no HTML do documento: base64 do arquivo + a tag em volta."""
+    return 4 * math.ceil(os.path.getsize(caminho) / 3) + FOLGA_HTML_POR_IMAGEM_BYTES
+
+
+def _planejar_partes(arquivos: list[str]) -> list[list[str]]:
+    """
+    Decide, ANTES de criar qualquer documento no SEI, em quantos
+    documentos as páginas de `arquivos` vão (ver LIMITE_DOCUMENTO_BYTES).
+
+    Cada arquivo passa UMA vez por _preparar_imagem_para_insercao(), e
+    as partes devolvidas já trazem os caminhos preparados (a cópia
+    reduzida, quando houve redução). Passar um caminho preparado de novo
+    por ela é inofensivo: ele já está abaixo do limite por página, então
+    volta o mesmo caminho, sem reduzir nada.
+
+    No caso normal devolve uma parte só, com todas as páginas.
+    """
+    preparados = [_preparar_imagem_para_insercao(caminho) for caminho in arquivos]
+    tamanhos = [_tamanho_estimado_imagem(caminho) for caminho in preparados]
+    indices = _dividir_em_partes(tamanhos, LIMITE_DOCUMENTO_BYTES - FOLGA_HTML_DOCUMENTO_BYTES)
+    return [[preparados[i] for i in parte] for parte in indices]
+
+
+def _eh_erro_de_tamanho(texto: str) -> bool:
+    """
+    True se `texto` é a recusa do SEI por tamanho ("documento com imagem
+    não pode exceder 2MB. Utilize a opção Documento Externo"). Ignora
+    maiúsculas/minúsculas e acentos.
+    """
+    sem_acento = "".join(
+        letra for letra in unicodedata.normalize("NFKD", texto or "")
+        if not unicodedata.combining(letra)
+    )
+    normalizado = re.sub(r"\s+", " ", sem_acento).lower()
+    return any(
+        trecho in normalizado
+        for trecho in ("exceder 2mb", "exceder 2 mb", "documento externo", "documento com imagem nao pode")
+    )
+
+
+def _texto_visivel_na_tela(pagina) -> str:
+    """
+    Texto visível na página e nos frames dela, só para procurar a
+    recusa por tamanho depois do Salvar. Leitura de melhor esforço:
+    qualquer falha devolve o que já leu (ou ""), nunca derruba o fluxo.
+    """
+    textos = []
+    try:
+        for frame in pagina.frames:
+            try:
+                textos.append(frame.locator("body").first.inner_text(timeout=1000))
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return "\n".join(textos)
 
 
 # ==== Editor CKEditor (diálogo de imagem, inserir, salvar) ====
@@ -745,12 +1009,20 @@ def _limpar_e_inserir_imagens(pagina_editor, arquivos: list[str], rotulo: str):
     Retorna o frame do corpo do texto já identificado aqui, pra quem
     chamar (executar_sei2) passar o mesmo frame pra
     _clicar_salvar_editor() sem descobrir de novo do zero.
+
+    Dois pontos de espera usam TIMEOUT_EDITOR_CARREGAR_MS /
+    TIMEOUT_DIALOGO_IMAGEM_MS (bem maiores que os 5s "normais" do resto
+    do arquivo), de propósito: a tela do editor do SEI pode demorar
+    bastante pra carregar quando o SEI está instável, e é melhor
+    esperar mais do que quebrar a automação achando cedo demais que o
+    elemento não existe.
     """
-    frame_editor = _encontrar_frame_editor(pagina_editor)
+    frame_editor = _encontrar_frame_editor(pagina_editor, timeout=TIMEOUT_EDITOR_CARREGAR_MS)
     if frame_editor is None:
         raise SystemExit(
             f"\n⚠️  Não encontrei o campo de texto (editor) do documento "
-            f"'{rotulo}' pra apagar e colar a imagem. A janela do editor "
+            f"'{rotulo}' pra apagar e colar a imagem, mesmo esperando até "
+            f"{TIMEOUT_EDITOR_CARREGAR_MS // 1000}s. A janela do editor "
             f"abriu em: {pagina_editor.url}\n"
         )
 
@@ -766,8 +1038,12 @@ def _limpar_e_inserir_imagens(pagina_editor, arquivos: list[str], rotulo: str):
 
     for caminho_arquivo in arquivos:
         caminho_para_inserir = _preparar_imagem_para_insercao(caminho_arquivo)
-        dialogo = _abrir_dialogo_imagem(pagina_editor, frame_editor=frame_editor, corpo=corpo)
-        _preencher_e_confirmar_dialogo_imagem(pagina_editor, dialogo, caminho_para_inserir)
+        dialogo = _abrir_dialogo_imagem(
+            pagina_editor, frame_editor=frame_editor, corpo=corpo, timeout=TIMEOUT_DIALOGO_IMAGEM_MS
+        )
+        _preencher_e_confirmar_dialogo_imagem(
+            pagina_editor, dialogo, caminho_para_inserir, timeout=TIMEOUT_DIALOGO_IMAGEM_MS
+        )
         print(f"Imagem da {rotulo} inserida no editor (diálogo 'Imagem' do CKEditor): {os.path.basename(caminho_arquivo)}")
 
     # Não trava a execução se essa contagem não bater -- essa
@@ -784,11 +1060,77 @@ def _limpar_e_inserir_imagens(pagina_editor, arquivos: list[str], rotulo: str):
     else:
         print(f"\n✅ Imagem da {rotulo} inserida com sucesso no documento (tinha {qtd_imagens_antes}, agora {qtd_imagens_depois}).")
 
+    _ajustar_largura_imagens(
+        pagina_editor, frame_editor, LARGURA_IMAGEM_POR_TIPO.get(rotulo, LARGURA_IMAGEM_NO_DOCUMENTO_PX)
+    )
+
     # Garante que o CKEditor já registrou a imagem internamente antes
     # do "Salvar" (ver _esperar_getData_conter_imagem).
     _esperar_getData_conter_imagem(pagina_editor, frame_editor=frame_editor)
 
     return frame_editor
+
+
+# Largura em que cada página aparece no documento do SEI, em pixels de
+# tela. A imagem guarda TODOS os pixels (1300-1650 de largura): isto só
+# muda o tamanho de exibição -- sem isso o editor mostra a imagem no
+# tamanho natural, bem maior que a folha. 800 px: um pouco mais que a
+# largura útil de uma A4 (680), a pedido; a altura acompanha.
+LARGURA_IMAGEM_NO_DOCUMENTO_PX = 800
+
+# Largura de exibição própria por tipo de documento (o `rotulo`: "CE",
+# "NL", "PP", "OB"); quem não está aqui usa LARGURA_IMAGEM_NO_DOCUMENTO_PX.
+# A OB aparece um pouco maior, a pedido, para os servidores lerem melhor.
+# 1000 px é um palpite inicial: ajuste olhando o documento no SEI. Só muda
+# o tamanho de EXIBIÇÃO -- os bytes da imagem são os mesmos, então não
+# mexe no limite de 2 MB nem na divisão em partes.
+LARGURA_IMAGEM_POR_TIPO = {"OB": 1000}
+
+
+def _ajustar_largura_imagens(pagina_editor, frame_editor, largura: int = LARGURA_IMAGEM_NO_DOCUMENTO_PX) -> None:
+    """
+    Dá a todas as <img> do corpo do texto a largura `largura` (padrão
+    LARGURA_IMAGEM_NO_DOCUMENTO_PX; ver LARGURA_IMAGEM_POR_TIPO) --
+    atributo width + estilo, sem altura fixa. Não interrompe nada se
+    falhar: a imagem só fica grande, como era antes.
+
+    ATENÇÃO: o max-width de 100% continua -- a imagem nunca passa da
+    largura do contêiner do SEI. Se o contêiner (do editor ou da
+    visualização/impressão do documento) for mais estreito que a largura
+    pedida, o aumento não aparece. Conferir ao vivo; se for o caso, é o
+    max-width que precisa ser ajustado.
+    """
+    try:
+        iframe_alvo = frame_editor.frame_element()
+        resultado = pagina_editor.evaluate(
+            """([iframeAlvo, largura]) => {
+                if (typeof CKEDITOR === 'undefined') return {erro: 'CKEDITOR undefined'};
+                for (const nome of Object.keys(CKEDITOR.instances || {})) {
+                    const editor = CKEDITOR.instances[nome];
+                    const janela = editor.window && editor.window.$;
+                    if (!janela || janela.frameElement !== iframeAlvo) continue;
+                    const imagens = editor.document.$.body.querySelectorAll('img');
+                    imagens.forEach((img) => {
+                        img.setAttribute('width', String(largura));
+                        img.removeAttribute('height');
+                        img.style.width = largura + 'px';
+                        img.style.height = 'auto';
+                        img.style.maxWidth = '100%';
+                    });
+                    editor.fire('change');
+                    return {ok: true, qtd: imagens.length};
+                }
+                return {erro: 'instância do editor não encontrada'};
+            }""",
+            [iframe_alvo, largura],
+        )
+    except Exception as erro:
+        resultado = {"erro": str(erro)}
+
+    if resultado and resultado.get("ok"):
+        print(f"Imagens ajustadas para {largura}px de largura no documento ({resultado['qtd']}).")
+    else:
+        print(f"\n⚠️  Aviso: não consegui ajustar a largura das imagens ({resultado!r}) -- elas ficam no tamanho natural.")
 
 
 def _esperar_getData_conter_imagem(
@@ -866,6 +1208,75 @@ def _esperar_getData_conter_imagem(
     )
 
 
+def _confirmar_imagens_persistidas(
+    pagina_editor, qtd_esperada: int, rotulo: str, timeout_ms: int = TIMEOUT_EDITOR_CARREGAR_MS
+) -> None:
+    """
+    Depois de clicar em "Salvar": RECARREGA a mesma tela do editor
+    (a URL "editor_montar" não muda) e conta quantas imagens o
+    documento tem DE VERDADE, direto do que o SEI gravou -- não confia
+    só no editor.getData() de antes de salvar (_esperar_getData_-
+    _conter_imagem já confere isso, mas só o que está na MEMÓRIA do
+    navegador).
+
+    Por quê essa confirmação a mais: como o comentário de
+    _preparar_imagem_para_insercao() já explica, o SEI às vezes aceita
+    o Salvar (responde sucesso) mas descarta a imagem EM SILÊNCIO se o
+    documento ficar grande demais pro armazenamento dele. Recarregando
+    e contando de novo é o único jeito de saber se a colagem realmente
+    "pegou" -- sem isso, um documento pode ficar sem a imagem sem
+    ninguém perceber até alguém abrir e conferir na mão.
+
+    Para a automação com SystemExit se a contagem não bater: os JPGs
+    originais continuam na pasta do processo, prontos pra inserir na
+    mão no documento que ficou faltando, e os documentos já anexados
+    antes deste não são desfeitos.
+    """
+    print(f"   🔍 Confirmando a {rotulo}: recarregando o documento salvo pra contar as imagens de novo...")
+
+    try:
+        pagina_editor.reload()
+    except PlaywrightError as erro:
+        raise SystemExit(
+            f"\n❌ Salvei a {rotulo}, mas não consegui recarregar a tela "
+            f"pra confirmar a imagem ({erro}). Confira na mão se o "
+            f"documento '{rotulo}' do processo ficou com a imagem certa "
+            f"antes de continuar (a aba ficou em: {pagina_editor.url}).\n"
+        )
+    _aguardar_rede(pagina_editor)
+
+    frame_editor = _encontrar_frame_editor(pagina_editor, timeout=timeout_ms)
+    if frame_editor is None:
+        raise SystemExit(
+            f"\n❌ Salvei a {rotulo}, mas depois de recarregar a tela pra "
+            f"confirmar, o corpo do texto não apareceu de novo em até "
+            f"{timeout_ms // 1000}s. Confira a aba do SEI que ficou "
+            f"aberta em: {pagina_editor.url}\n"
+        )
+
+    try:
+        qtd_encontrada = frame_editor.locator('body[contenteditable="true"] img').count()
+    except PlaywrightError:
+        qtd_encontrada = 0
+
+    if qtd_encontrada < qtd_esperada:
+        raise SystemExit(
+            f"\n❌ CONFIRMAÇÃO FALHOU na {rotulo}: depois de salvar e "
+            f"recarregar o documento, ele tem {qtd_encontrada} imagem(ns) "
+            f"gravada(s), mas deveria ter {qtd_esperada}. O SEI pode ter "
+            "descartado alguma em silêncio ao salvar (documento grande "
+            "demais pro armazenamento dele).\n"
+            "   O QUE FAZER: abra este documento no SEI, veja o que "
+            "falta e insira a imagem que sumiu na mão -- os JPGs "
+            f"originais continuam na pasta do processo. A aba ficou em: "
+            f"{pagina_editor.url}\n"
+            "   Os documentos já anexados antes deste continuam valendo "
+            "-- só este precisa de atenção.\n"
+        )
+
+    print(f"   ✅ Confirmado: {qtd_encontrada}/{qtd_esperada} imagem(ns) da {rotulo} realmente gravada(s) no documento.")
+
+
 # ==== Inclusão de documento no SEI ====
 
 
@@ -905,9 +1316,15 @@ def _incluir_documento(aba_sei, texto_link: str, rotulo: str, numero_pp: str = N
     # Tenta primeiro no mesmo lugar onde "Incluir Documento" foi
     # encontrado -- candidato mais provável -- e só cai pros outros se
     # não for esse.
+    #
+    # :text-is() (igualdade EXATA de texto, não substring) e não
+    # :has-text() -- "OB - Ordem Bancária" é substring de "OB - Ordem
+    # Bancária de Regularização", então com :has-text() escolher o tipo
+    # "OB - Ordem Bancária" batia nos DOIS links da lista ao mesmo tempo
+    # e o clique quebrava (elemento ambíguo).
     candidatos_tipo = (frame_incluir,) + CANDIDATOS_FRAMES
     frame_tipo, locator_tipo, nome_frame_tipo = _procurar_lugar(
-        aba_sei, candidatos_tipo, f'a.ancoraOpcao:has-text("{texto_link}")'
+        aba_sei, candidatos_tipo, f'a.ancoraOpcao:text-is("{texto_link}")'
     )
     if frame_tipo is None:
         print("\nFrames abertos nesta página do SEI (depois de clicar em 'Incluir Documento'):")
@@ -936,16 +1353,25 @@ def _incluir_documento(aba_sei, texto_link: str, rotulo: str, numero_pp: str = N
     return frame_tipo
 
 
-def _incluir_e_editar_documento(context, aba_sei, texto_link: str, rotulo: str, numero_pp: str = None):
+def _incluir_e_editar_documento(
+    context, aba_sei, texto_link: str, rotulo: str, numero_pp: str = None, antes_de_criar=None
+):
     """
     _incluir_documento() + clica em "Salvar" (dentro do
     context.expect_page() que captura a nova aba do editor). O SEI
     duplica o botão #btnSalvar (mesmo id nas barras de comando de cima
     e de baixo) -- `.first` evita "strict mode violation".
 
+    `antes_de_criar`, se informado, é chamado logo antes do clique que
+    cria o documento no SEI: é a partir dali que uma falha pode deixar
+    um documento criado pela metade (ver _anexar_documento).
+
     Retorna a Page do editor de texto do documento recém-criado.
     """
     frame_tipo = _incluir_documento(aba_sei, texto_link, rotulo, numero_pp=numero_pp)
+
+    if antes_de_criar is not None:
+        antes_de_criar()
 
     with context.expect_page() as pagina_editor_info:
         frame_tipo.locator("#btnSalvar").first.click()
@@ -957,10 +1383,378 @@ def _incluir_e_editar_documento(context, aba_sei, texto_link: str, rotulo: str, 
     return pagina_editor
 
 
+# ==== Retomada: o que já foi anexado neste processo ====
+#
+# A internet do órgão cai, e o ponto mais sensível é colar as imagens e
+# salvar o documento. Antes, qualquer falha ali fazia recomeçar tudo --
+# download do SIGEF inclusive -- e recriava no SEI documentos que já
+# estavam prontos.
+#
+# Agora cada documento tem uma chave ("CE", "NL 2026PP066790", ...) e o
+# estado dele fica gravado em progresso_sei.json, na pasta do processo:
+#
+#     criando  o clique que cria o documento no SEI foi dado, mas o
+#              editor não chegou a abrir -- pode ou não ter sido criado
+#     criado   o documento existe no SEI, mas o conteúdo não foi salvo;
+#              guarda o endereço do editor para reabrir e completar
+#     salvo    pronto -- numa nova tentativa é pulado
+#
+# O arquivo é da OB: outra OB no mesmo processo começa do zero. Quando a
+# OB termina inteira, o progresso some e ela entra na lista de OBs
+# concluídas deste processo (progresso_sei_concluido.json). Rodar de
+# novo a mesma OB à mão volta a anexar tudo; o LOTE consulta essa lista
+# (ob_ja_concluida) e pula, para a mesma planilha rodada duas vezes não
+# duplicar documentos.
+
+ARQUIVO_PROGRESSO = "progresso_sei.json"
+ARQUIVO_PROGRESSO_CONCLUIDO = "progresso_sei_concluido.json"
+
+# Quantas vezes colar e salvar no MESMO editor antes de desistir, e a
+# espera antes de cada nova tentativa (segundos). Tentar no mesmo
+# editor não cria documento novo: o corpo é limpo e colado de novo.
+TENTATIVAS_CONTEUDO = 3
+
+# Por quanto tempo uma tentativa que caiu no meio vale para retomar. É o
+# tempo de uma queda de internet passar -- não o de um teste esquecido:
+# documentos de teste costumam ser excluídos no SEI depois, e um registro
+# velho faria pular documentos que não existem mais. Passado o prazo, a
+# OB é anexada inteira de novo (a conferência pega o que ficar em dobro).
+PRAZO_RETOMADA_HORAS = 12
+ESPERAS_ENTRE_TENTATIVAS = (5, 15)
+
+
+class ProgressoSei:
+    """O que já foi feito no SEI para uma OB, gravado a cada passo."""
+
+    def __init__(self, processo: str, ob: str, pasta_base: str = PASTA_BASE):
+        self.pasta = os.path.join(pasta_base, nome_pasta_valido(processo))
+        self.caminho = os.path.join(self.pasta, ARQUIVO_PROGRESSO)
+        self.ob = ob or ""
+        self.documentos = {}
+
+        try:
+            with open(self.caminho, "r", encoding="utf-8") as arquivo:
+                gravado = json.load(arquivo)
+            idade_horas = (time.time() - os.path.getmtime(self.caminho)) / 3600
+        except (OSError, json.JSONDecodeError):
+            gravado, idade_horas = {}, 0
+
+        if gravado.get("ob", "") == self.ob and gravado.get("documentos"):
+            if idade_horas > PRAZO_RETOMADA_HORAS:
+                print(
+                    f"\nℹ️  Havia uma tentativa desta OB interrompida há {idade_horas:.0f}h -- velha demais "
+                    "para retomar. Anexando tudo de novo (confira duplicidade no fim)."
+                )
+            else:
+                self.documentos = gravado["documentos"]
+
+    @property
+    def retomando(self) -> bool:
+        return bool(self.documentos)
+
+    def estado(self, chave: str) -> dict:
+        return self.documentos.get(chave) or {}
+
+    def marcar(self, chave: str, estado: str, **extra) -> None:
+        self.documentos[chave] = {"estado": estado, **extra}
+        os.makedirs(self.pasta, exist_ok=True)
+        with open(self.caminho, "w", encoding="utf-8") as arquivo:
+            json.dump({"ob": self.ob, "documentos": self.documentos}, arquivo, ensure_ascii=False, indent=2)
+
+    def concluir(self) -> None:
+        obs = _obs_concluidas(self.pasta)
+        if self.ob and self.ob not in obs:
+            obs.append(self.ob)
+        os.makedirs(self.pasta, exist_ok=True)
+        with open(os.path.join(self.pasta, ARQUIVO_PROGRESSO_CONCLUIDO), "w", encoding="utf-8") as arquivo:
+            json.dump({"obs": obs}, arquivo, ensure_ascii=False, indent=2)
+        if os.path.exists(self.caminho):
+            os.remove(self.caminho)
+
+
+def _sequencial_ob(ob: str) -> str:
+    """'2026OB136475' e '136475' são a mesma OB."""
+    return re.sub(r"^\d+OB", "", (ob or "").strip().upper())
+
+
+def _obs_concluidas(pasta_processo: str) -> list[str]:
+    try:
+        with open(os.path.join(pasta_processo, ARQUIVO_PROGRESSO_CONCLUIDO), "r", encoding="utf-8") as arquivo:
+            gravado = json.load(arquivo)
+    except (OSError, json.JSONDecodeError):
+        return []
+    # Formato antigo: {"ob": ..., "documentos": ...}, uma OB só.
+    return list(gravado.get("obs") or ([gravado["ob"]] if gravado.get("ob") else []))
+
+
+def ob_ja_concluida(processo: str, ob: str, pasta_base: str = PASTA_BASE) -> bool:
+    """
+    True se esta OB já foi anexada inteira neste processo numa rodada
+    anterior. O lote usa para não anexar de novo quando a mesma lista
+    é rodada duas vezes.
+    """
+    pasta = os.path.join(pasta_base, nome_pasta_valido(processo))
+    return bool(ob) and _sequencial_ob(ob) in {_sequencial_ob(o) for o in _obs_concluidas(pasta)}
+
+
+def _reabrir_editor(context, url: str):
+    """Reabre o editor de um documento criado numa tentativa anterior. None se não der."""
+    if not url:
+        return None
+    pagina = context.new_page()
+    try:
+        pagina.goto(url, timeout=60000)
+        _aguardar_rede(pagina, timeout=5000)
+        if _encontrar_frame_editor(pagina, timeout=15000) is not None:
+            return pagina
+    except PlaywrightError:
+        pass
+    try:
+        pagina.close()
+    except PlaywrightError:
+        pass
+    return None
+
+
+def _anexar_documento(
+    context, aba_sei, progresso: ProgressoSei, avisos: list,
+    chave: str, descricao: str, texto_link: str, rotulo: str, arquivos: list[str],
+    numero_pp: str = None,
+) -> None:
+    """
+    Inclui UM documento no SEI e cola as imagens nele, sabendo retomar.
+
+    Antes de criar qualquer coisa no SEI, estima o tamanho do documento
+    (_planejar_partes). Se passar de LIMITE_DOCUMENTO_BYTES, as páginas
+    vão em N documentos do mesmo tipo ("parte 1/N" ... "parte N/N"),
+    cada um com a chave de progresso "<chave> · parte i/N" -- para PP,
+    o mesmo número em todas; para OB, o mesmo tipo escolhido. Cabendo
+    (o normal), é um documento só, com a chave de sempre: nada muda.
+
+    Cada documento (ou parte) segue _anexar_parte():
+
+        já salvo antes                -> pula
+        criado antes, sem conteúdo    -> reabre o mesmo editor e completa
+        criado mas não dá pra reabrir -> cria outro e avisa na conferência
+        nada ainda                    -> cria
+
+    Retomada de uma tentativa que caiu POR TAMANHO (antes de existir a
+    divisão): o documento vazio que ficou, gravado com a chave sem
+    "parte", é reaproveitado como parte 1. Se a chave sem "parte" está
+    "salvo", o documento coube daquela vez -- pula, como sempre.
+    """
+    estado = progresso.estado(chave)
+
+    if estado.get("estado") == "salvo":
+        print(f"\n⏭️  {descricao}: já foi anexado numa tentativa anterior -- pulando.")
+        return
+
+    partes = _planejar_partes(arquivos) or [[]]
+    total_partes = len(partes)
+
+    # Um plano de partes gravado numa tentativa anterior que não bate com
+    # o de agora (os arquivos mudaram): avisa e segue com o plano atual.
+    prefixo_partes = f"{chave} · parte "
+    gravadas = {
+        chave_gravada: dados for chave_gravada, dados in progresso.documentos.items()
+        if chave_gravada.startswith(prefixo_partes)
+    }
+    if gravadas and {dados.get("partes") for dados in gravadas.values()} != {total_partes}:
+        avisos.append(
+            f"{chave}: a tentativa anterior tinha dividido este documento de outro jeito "
+            f"(os arquivos mudaram). Agora vai em {total_partes} documento(s) -- confira se "
+            "não ficaram partes repetidas ou vazias no processo."
+        )
+        print(f"\n⚠️  {avisos[-1]}")
+
+    if total_partes == 1:
+        _anexar_parte(
+            context, aba_sei, progresso, avisos, chave, descricao, texto_link, rotulo, partes[0],
+            numero_pp=numero_pp,
+        )
+        return
+
+    limite_util = LIMITE_DOCUMENTO_BYTES - FOLGA_HTML_DOCUMENTO_BYTES
+    tamanhos_partes = [sum(_tamanho_estimado_imagem(caminho) for caminho in parte) for parte in partes]
+    paginas_por_parte = " + ".join(str(len(parte)) for parte in partes)
+    print(
+        f"\n✂️  {descricao}: {len(arquivos)} página(s), cerca de "
+        f"{_em_mb(sum(tamanhos_partes) + FOLGA_HTML_DOCUMENTO_BYTES)} MB estimados -- passa do "
+        f"limite de {_em_mb(LIMITE_DOCUMENTO_BYTES)} MB por documento do SEI. "
+        f"Vai em {total_partes} documentos ({paginas_por_parte} páginas)."
+    )
+    avisos.append(
+        f"{chave}: dividida em {total_partes} documentos ({paginas_por_parte} páginas) "
+        "por causa do limite de 2 MB do SEI. Confira a ordem."
+    )
+    for indice, (parte, tamanho) in enumerate(zip(partes, tamanhos_partes), start=1):
+        if tamanho > limite_util:
+            avisos.append(
+                f"{chave} (parte {indice}/{total_partes}): uma página sozinha passa do limite "
+                "estimado -- o SEI pode recusar. Se recusar, insira essa página à mão."
+            )
+            print(f"   ⚠️  {avisos[-1]}")
+
+    # O documento vazio que ficou de uma tentativa que caiu por tamanho
+    # (chave sem "parte", criado ou criando) vira a parte 1: o estado
+    # dele passa para a chave da parte 1, e _anexar_parte() reabre o
+    # mesmo editor (ou, não dando, cria outro e avisa do vazio).
+    chave_parte_1 = f"{chave} · parte 1/{total_partes}"
+    if estado.get("estado") in ("criado", "criando") and not progresso.estado(chave_parte_1):
+        del progresso.documentos[chave]
+        progresso.marcar(chave_parte_1, **{**estado, "partes": total_partes})
+        print(
+            "   ♻️  Ficou um documento sem conteúdo da tentativa anterior: "
+            f"ele vai ser usado como a parte 1/{total_partes}."
+        )
+
+    for indice, parte in enumerate(partes, start=1):
+        _anexar_parte(
+            context, aba_sei, progresso, avisos,
+            f"{chave} · parte {indice}/{total_partes}", f"{descricao} (parte {indice}/{total_partes})",
+            texto_link, rotulo, parte, numero_pp=numero_pp, extra_progresso={"partes": total_partes},
+        )
+
+
+def _anexar_parte(
+    context, aba_sei, progresso: ProgressoSei, avisos: list,
+    chave: str, descricao: str, texto_link: str, rotulo: str, arquivos: list[str],
+    numero_pp: str = None, extra_progresso: dict = None,
+) -> None:
+    """
+    Inclui UM documento no SEI (ou uma parte dele) e cola as imagens
+    nele, sabendo retomar -- é o fluxo de sempre do _anexar_documento.
+
+    Colar e salvar são tentados TENTATIVAS_CONTEUDO vezes no mesmo
+    editor, esperando a internet voltar entre uma e outra -- menos
+    quando o SEI recusa por TAMANHO: repetir daria o mesmo erro, então
+    para na hora, dizendo a causa (ver _eh_erro_de_tamanho).
+
+    `extra_progresso` vai junto em cada marcar() (o total de partes,
+    quando o documento foi dividido).
+    """
+    extra = extra_progresso or {}
+    estado = progresso.estado(chave)
+
+    if estado.get("estado") == "salvo":
+        print(f"\n⏭️  {descricao}: já foi anexado numa tentativa anterior -- pulando.")
+        return
+
+    print(f"\n📄 {descricao} ({len(arquivos)} página(s))...")
+
+    pagina_editor = None
+    if estado.get("estado") == "criado":
+        print("   Este documento já tinha sido criado no SEI, mas ficou sem conteúdo. Reabrindo o mesmo...")
+        pagina_editor = _reabrir_editor(context, estado.get("url_editor"))
+        if pagina_editor is None:
+            avisos.append(
+                f"{descricao}: ficou um documento VAZIO de uma tentativa anterior no processo. "
+                "Um novo foi criado com o conteúdo -- exclua o vazio."
+            )
+            print(f"   ⚠️  Não consegui reabrir. Vou criar outro -- {avisos[-1]}")
+    elif estado.get("estado") == "criando":
+        avisos.append(
+            f"{descricao}: a tentativa anterior caiu no momento de criar o documento. "
+            "Confira se não ficou um documento vazio desse tipo no processo."
+        )
+        print(f"   ⚠️  {avisos[-1]}")
+
+    if pagina_editor is None:
+        _aguardar_rede(aba_sei)
+        pagina_editor = _incluir_e_editar_documento(
+            context, aba_sei, texto_link, rotulo, numero_pp=numero_pp,
+            antes_de_criar=lambda: progresso.marcar(chave, "criando", **extra),
+        )
+        progresso.marcar(chave, "criado", url_editor=pagina_editor.url, **extra)
+
+    # O que o SEI mostrar depois do Salvar, para reconhecer a recusa por
+    # tamanho (_eh_erro_de_tamanho). Um alert() do SEI é anotado aqui e
+    # fechado com dismiss() -- o mesmo que o Playwright já faz sozinho
+    # quando ninguém escuta "dialog"; a diferença é só guardar o texto.
+    textos_do_sei = []
+
+    def _anotar_dialogo(dialogo) -> None:
+        try:
+            textos_do_sei.append(dialogo.message)
+        except Exception:
+            pass
+        try:
+            dialogo.dismiss()
+        except Exception:
+            pass
+
+    try:
+        pagina_editor.on("dialog", _anotar_dialogo)
+    except Exception:
+        pass
+
+    for tentativa in range(1, TENTATIVAS_CONTEUDO + 1):
+        textos_do_sei.clear()
+        try:
+            frame_editor = _limpar_e_inserir_imagens(pagina_editor, arquivos, rotulo)
+            _clicar_salvar_editor(pagina_editor, frame_editor=frame_editor)
+            # Lido ANTES da confirmação, que recarrega a tela e apagaria
+            # uma mensagem de erro mostrada na própria página.
+            # TODO: não se sabe ao certo ONDE o SEI mostra a recusa de 2 MB
+            # (alert, a própria página do editor ou outra tela) -- por isso
+            # se lê o texto de todos os frames e o alert, sem seletor fixo.
+            # Conferir ao vivo; se não aparecer, sobra a confirmação abaixo.
+            textos_do_sei.append(_texto_visivel_na_tela(pagina_editor))
+            # Recarrega e conta as imagens gravadas: o SEI às vezes aceita o
+            # Salvar e descarta a imagem em silêncio. Faltando imagem, cai no
+            # except e cola de novo neste mesmo documento.
+            _confirmar_imagens_persistidas(pagina_editor, len(arquivos), rotulo)
+            break
+        except (SystemExit, PlaywrightError) as erro:
+            linhas = str(getattr(erro, "code", None) or erro).strip().splitlines()
+            detalhe = linhas[0] if linhas else type(erro).__name__
+            if _eh_erro_de_tamanho("\n".join([str(getattr(erro, "code", None) or erro), *textos_do_sei])):
+                # Repetir o mesmo conteúdo daria o mesmo erro: para aqui.
+                raise SystemExit(
+                    f"\n❌ O SEI RECUSOU o documento {descricao} por TAMANHO: passou do limite\n"
+                    "    de 2 MB por documento com imagem. NÃO é problema de internet -- tentar\n"
+                    "    de novo daria o mesmo erro, por isso parei aqui.\n\n"
+                    "    O QUE FAZER: abra este documento no SEI, veja quais páginas faltam e\n"
+                    "    insira à mão a(s) imagem(ns) que faltou(aram) -- os JPGs continuam na\n"
+                    "    pasta do processo. Avise também quem mantém o programa: o limite\n"
+                    f"    estimado por documento (LIMITE_DOCUMENTO_BYTES, hoje "
+                    f"{_em_mb(LIMITE_DOCUMENTO_BYTES)} MB) precisa\n"
+                    "    ser menor para o programa dividir este documento sozinho.\n"
+                    f"    A aba ficou em: {pagina_editor.url}\n"
+                ) from None
+            if tentativa == TENTATIVAS_CONTEUDO or pagina_editor.is_closed():
+                raise SystemExit(
+                    f"\n⚠️  Não consegui colar e salvar o documento {descricao} "
+                    f"depois de {tentativa} tentativa(s).\n"
+                    f"    Último erro: {detalhe}\n\n"
+                    "    Quase sempre é a internet. Quando ela voltar, rode de novo com o\n"
+                    "    MESMO processo e a MESMA OB: o programa continua deste documento,\n"
+                    "    sem baixar de novo do SIGEF e sem repetir o que já foi anexado.\n"
+                ) from None
+            espera = ESPERAS_ENTRE_TENTATIVAS[min(tentativa, len(ESPERAS_ENTRE_TENTATIVAS)) - 1]
+            print(
+                f"   ⚠️  Falhou ao colar/salvar ({detalhe}).\n"
+                f"   Tentando de novo no mesmo documento em {espera}s "
+                f"(tentativa {tentativa + 1} de {TENTATIVAS_CONTEUDO})..."
+            )
+            try:
+                pagina_editor.keyboard.press("Escape")  # fecha um diálogo "Imagem" que tenha ficado aberto
+            except PlaywrightError:
+                pass
+            time.sleep(espera)
+
+    progresso.marcar(chave, "salvo", **extra)
+    pagina_editor.close()
+    aba_sei.bring_to_front()
+
+
 # ==== Fluxo principal ====
 
 
-def executar_sei2(context, processo: str, dados: dict = None):
+def executar_sei2(
+    context, processo: str, dados: dict = None, tipo_ob: str = None,
+    conferir_no_fim: bool = True, avisos_saida: list = None,
+):
     """
     Segunda metade do fluxo: pega o que a etapa_listar_baixar.py baixou
     do SIGEF e anexa no SEI, no `processo`.
@@ -969,32 +1763,50 @@ def executar_sei2(context, processo: str, dados: dict = None):
     (quando as duas rodam emendadas) -- por isso a aba do SEI já
     logada é reaproveitada, sem novo login.
 
-    `dados` é o pacote montado no passo 7 da etapa anterior
-    (arquivos_ce, arquivos_ob e, por lançamento, arquivos_nl e
+    `dados` é o pacote montado no passo 8 da etapa anterior
+    (grupos_ce, arquivos_ob e, por lançamento, arquivos_nl e
     arquivos_pp). Se vier None -- caso de rodar esta etapa sozinha --
     os mesmos dados são lidos da sessão, e só em último caso
     procurados na pasta pelo nome dos arquivos (ver
     resolver_dados_da_etapa_anterior).
 
+    `tipo_ob` é qual dos dois tipos de documento usar pra anexar a OB:
+    TEXTO_LINK_OB_REGULARIZACAO ("OB - Ordem Bancária de
+    Regularização") ou TEXTO_LINK_OB_NORMAL ("OB - Ordem Bancária").
+    Normalmente vem de main.py (perguntar_tipo_ob(), perguntado junto
+    com o processo e a OB). Se vier None -- rodando esta etapa
+    sozinha, por exemplo -- cai pro que estiver gravado na sessão
+    (a mesma escolha da última rodada) e, faltando isso também, pro
+    tipo antigo (Regularização), que era o único que existia antes
+    dessa escolha ser possível.
+
     A ordem dos documentos incluídos é a mesma de sempre:
 
-        CE (1 no lote) -> NL (1 por PP) -> PP (1 por PP) -> OB (1 no lote)
+        CE (1 por CE distinta) -> NL (1 por PP) -> PP (1 por PP) -> OB (1 no lote)
 
     todos com Nível de Acesso Restrito + Hipótese Legal "Documento
     Preparatório", e o documento PP ainda com o número da PP preenchido
     em #txtNumero.
 
+    `conferir_no_fim=False` é o modo lote (lote.py): não para no fim
+    esperando a conferência -- ela é feita uma vez só, para todos os
+    processos, quando o lote termina. Os avisos desta OB (documento
+    vazio que sobrou de uma queda, por exemplo) vão para `avisos_saida`.
+
     Retorna a aba do SEI (Page).
     """
+    if tipo_ob is None:
+        tipo_ob = carregar_sessao().get("tipo_ob") or TEXTO_LINK_OB_REGULARIZACAO
+
     # ---- o que anexar, e de onde isso veio ----
     pacote = resolver_dados_da_etapa_anterior(processo, dados)
-    arquivos_ce = pacote["arquivos_ce"]
+    grupos_ce = pacote["grupos_ce"]
     arquivos_ob = pacote["arquivos_ob"]
     grupos_nl = pacote["grupos_nl"]
     grupos_pp = pacote["grupos_pp"]
 
     total = (
-        len(arquivos_ce)
+        sum(len(a) for _numero, a in grupos_ce)
         + len(arquivos_ob)
         + sum(len(a) for _pp, a in grupos_nl)
         + sum(len(a) for _pp, a in grupos_pp)
@@ -1009,7 +1821,7 @@ def executar_sei2(context, processo: str, dados: dict = None):
 
     print(
         f"\nArquivos vindos da etapa anterior (origem: {pacote['origem']}): "
-        f"CE {len(arquivos_ce)} | OB {len(arquivos_ob)} | "
+        f"CE {len(grupos_ce)} documento(s) | OB {len(arquivos_ob)} | "
         f"NL {len(grupos_nl)} documento(s) | PP {len(grupos_pp)} documento(s) "
         f"-- {total} imagem(ns) no total."
     )
@@ -1017,13 +1829,21 @@ def executar_sei2(context, processo: str, dados: dict = None):
     # Os quatro tipos são esperados; faltar algum é aviso, não erro --
     # o resto continua sendo anexado.
     for rotulo, tem in (
-        ("CE (Despesa Certificada)", bool(arquivos_ce)),
+        ("CE (Despesa Certificada)", bool(grupos_ce)),
         ("OB (Ordem Bancária)", bool(arquivos_ob)),
         ("NL (Nota de Lançamento)", bool(grupos_nl)),
         ("PP (Preparação de Pagamento)", bool(grupos_pp)),
     ):
         if not tem:
             print(f"⚠️  Nada de {rotulo} -- esse documento não será incluído.")
+
+    # O que já foi feito no SEI para esta OB, se for uma nova tentativa.
+    ob = (dados or {}).get("ob") or (carregar_sessao().get("lancamentos_ob") or "")
+    progresso = ProgressoSei(processo, ob)
+    avisos = []
+    if progresso.retomando:
+        prontos = sum(1 for d in progresso.documentos.values() if d.get("estado") == "salvo")
+        print(f"\n🔁 Continuando de onde parou: {prontos} documento(s) já anexado(s) nesta OB.")
 
     aba_sei = obter_ou_criar_aba(
         context,
@@ -1049,52 +1869,58 @@ def executar_sei2(context, processo: str, dados: dict = None):
     else:
         print("Botão 'Reabrir Processo' não apareceu em nenhum lugar candidato -- processo já deve estar aberto.")
 
-    # ---- CE (Despesa Certificada) -- um documento só, pro processo inteiro ----
-    if arquivos_ce:
-        print(f"\n📄 CE ({len(arquivos_ce)} página(s))...")
-        _aguardar_rede(aba_sei)
-        pagina_editor_ce = _incluir_e_editar_documento(context, aba_sei, "Despesa Certificada", "CE")
-        frame_editor_ce = _limpar_e_inserir_imagens(pagina_editor_ce, arquivos_ce, "CE")
-        _clicar_salvar_editor(pagina_editor_ce, frame_editor=frame_editor_ce)
-        pagina_editor_ce.close()
-        aba_sei.bring_to_front()
+    # Um documento por vez, cada um sabendo retomar (ver _anexar_documento).
+    # A ordem é a de sempre: CE, NL (1 por PP), PP (1 por PP), OB.
+    def anexar(*args, **kwargs):
+        _anexar_documento(context, aba_sei, progresso, avisos, *args, **kwargs)
+
+    # ---- CE (Despesa Certificada) -- um documento por CE DISTINTA baixada,
+    #      no mesmo estilo da NL e da PP (a mesma CE reaproveitada por
+    #      várias PPs entra só uma vez, já deduplicada em grupos_ce) ----
+    # Progresso gravado pela versão de CE única (chave "CE", sem número):
+    # com uma CE só, é ela -- passa para a chave nova e não repete. Com
+    # várias, não dá pra saber qual foi; anexa todas e avisa.
+    if progresso.estado("CE").get("estado") == "salvo" and grupos_ce:
+        if len(grupos_ce) == 1:
+            numero_unico = grupos_ce[0][0] or "(sem número, 1)"
+            progresso.marcar(f"CE {numero_unico}", "salvo")
+        else:
+            avisos.append(
+                "CE: uma Despesa Certificada já tinha sido anexada pela versão anterior do "
+                "programa. Confira se não ficou uma CE repetida no processo."
+            )
+        del progresso.documentos["CE"]
+
+    for indice, (numero_ce, arquivos_ce) in enumerate(grupos_ce, start=1):
+        rotulo_ce = numero_ce or f"(sem número, {indice})"
+        anexar(f"CE {rotulo_ce}", f"CE {indice}/{len(grupos_ce)} -- {rotulo_ce}", "Despesa Certificada", "CE", arquivos_ce)
 
     # ---- NL (Nota de Lançamento) -- um documento por PP baixada ----
     for indice, (pp, arquivos_nl) in enumerate(grupos_nl, start=1):
-        print(f"\n📄 NL {indice}/{len(grupos_nl)} ({len(arquivos_nl)} página(s)) -- PP {pp}...")
-        _aguardar_rede(aba_sei)
-        pagina_editor_nl = _incluir_e_editar_documento(context, aba_sei, "NL - Nota de Lançamento", "NL")
-        frame_editor_nl = _limpar_e_inserir_imagens(pagina_editor_nl, arquivos_nl, "NL")
-        _clicar_salvar_editor(pagina_editor_nl, frame_editor=frame_editor_nl)
-        pagina_editor_nl.close()
-        aba_sei.bring_to_front()
+        anexar(f"NL {pp}", f"NL {indice}/{len(grupos_nl)} -- PP {pp}", "NL - Nota de Lançamento", "NL", arquivos_nl)
 
     # ---- PP (Preparação de Pagamento) -- um documento por PP baixada ----
     # O campo #txtNumero do SEI quer só o sequencial da PP
     # ("2026PP066790" -> "066790").
     for indice, (pp, arquivos_pp) in enumerate(grupos_pp, start=1):
         numero_pp = re.sub(r"^\d{4}PP", "", pp, flags=re.IGNORECASE)
-        print(f"\n📄 PP {indice}/{len(grupos_pp)} ({len(arquivos_pp)} página(s)) -- PP {numero_pp}...")
-        _aguardar_rede(aba_sei)
-        pagina_editor_pp = _incluir_e_editar_documento(
-            context, aba_sei, "PP - Preparação de Pagamento", "PP", numero_pp=numero_pp
+        anexar(
+            f"PP {pp}", f"PP {indice}/{len(grupos_pp)} -- PP {numero_pp}",
+            "PP - Preparação de Pagamento", "PP", arquivos_pp, numero_pp=numero_pp,
         )
-        frame_editor_pp = _limpar_e_inserir_imagens(pagina_editor_pp, arquivos_pp, "PP")
-        _clicar_salvar_editor(pagina_editor_pp, frame_editor=frame_editor_pp)
-        pagina_editor_pp.close()
-        aba_sei.bring_to_front()
 
-    # ---- OB (Ordem Bancária de Regularização) -- um documento só, pro processo inteiro ----
+    # ---- OB -- um documento só, pro processo inteiro, no tipo escolhido ----
     if arquivos_ob:
-        print(f"\n📄 OB ({len(arquivos_ob)} página(s))...")
-        _aguardar_rede(aba_sei)
-        pagina_editor_ob = _incluir_e_editar_documento(
-            context, aba_sei, "OB - Ordem Bancária de Regularização", "OB"
-        )
-        frame_editor_ob = _limpar_e_inserir_imagens(pagina_editor_ob, arquivos_ob, "OB")
-        _clicar_salvar_editor(pagina_editor_ob, frame_editor=frame_editor_ob)
-        pagina_editor_ob.close()
-        aba_sei.bring_to_front()
+        anexar("OB", f"OB -- {tipo_ob}", tipo_ob, "OB", arquivos_ob)
+
+    progresso.concluir()
+
+    if avisos_saida is not None:
+        avisos_saida.extend(avisos)
+
+    if not conferir_no_fim:
+        print(f"\nEtapa SEI (2) concluída no processo '{processo}' -- a conferência fica para o fim do lote.")
+        return aba_sei
 
     # Pausa a automação aqui de propósito -- antes de devolver o
     # controle pra quem chamou (que reinicia o loop lá na Etapa SEI (1)
@@ -1113,7 +1939,7 @@ def executar_sei2(context, processo: str, dados: dict = None):
         f"Etapa SEI (2) concluída: CE, NL, PP e OB anexados no processo "
         f"'{processo}'."
     )
-    aviso_conferencia_final(processo)
+    aviso_conferencia_final(processo, avisos)
 
     input(
         "\n>>> Confira os documentos na tela do SEI, faça o que for preciso\n"
@@ -1132,12 +1958,14 @@ if __name__ == "__main__":
     # Passa pelo mesmo passo 0 da etapa anterior para não descobrir que
     # faltava login só no meio do anexo.
     from preparar_navegador import preparar_navegador
-    from main import perguntar_processo
+    from main import perguntar_processo, perguntar_tipo_ob
 
     playwright, browser, context, _aba_sigef, _aba_sei = preparar_navegador()
     try:
-        processo = perguntar_processo(carregar_sessao())
-        aba_sei = executar_sei2(context, processo)
+        sessao = carregar_sessao()
+        processo = perguntar_processo(sessao)
+        tipo_ob = perguntar_tipo_ob(sessao)
+        aba_sei = executar_sei2(context, processo, tipo_ob=tipo_ob)
         print(f"OK: de volta no SEI. Página: {aba_sei.url}")
     finally:
         playwright.stop()

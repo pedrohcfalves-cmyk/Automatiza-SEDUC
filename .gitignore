@@ -32,3 +32,39 @@ env/
 .idea/
 Thumbs.db
 desktop.ini
+
+# O Python que o lancador baixa quando a maquina nao tem um
+python-embutido/
+
+# Marca do que o lancador ja instalou
+.lba-instalado
+
+# Sobras de compilacao do lancador
+lancador/*.o
+
+# Saída do PyInstaller e do Inno Setup (instalador/construir.py)
+build/
+dist/
+instalador/versao_exe.txt
+
+# Relatórios do modo lote: números de processo e de OB
+lotes/
+
+# Progresso da etapa do SEI (por processo/OB): processos, OBs e
+# endereços de documentos do SEI
+progresso_sei.json
+progresso_sei_concluido.json
+
+# Dados que o programa grava na pasta de dados (normalmente em
+# Documentos\Automacao SIGEF-SEI, mas LBA_PASTA_DADOS pode apontar pra
+# cá): registros da janela, métricas, relatórios gerenciais, dados do
+# Amigo e preferências locais
+registros/
+metricas/
+relatorios/
+amigo/
+config.json
+
+# Cópias de segurança feitas antes de uma alteração
+# (ex.: etapa_sei2.py.bak_antes_divisao)
+*.bak_*
