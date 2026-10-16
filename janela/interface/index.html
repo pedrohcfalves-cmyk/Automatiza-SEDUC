@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Central de Automações</title>
 <link rel="stylesheet" href="estilo.css">
+<link rel="stylesheet" href="dare.css">
 </head>
 <body>
 
@@ -20,8 +21,8 @@
   <symbol id="i-voltar" viewBox="0 0 24 24"><path d="M20 12H5M11 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-planilha" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M4 9h16M4 15h16M10 9v12" stroke="currentColor" stroke-width="1.8"/></symbol>
   <symbol id="i-banco" viewBox="0 0 24 24"><path d="M3 9.5L12 4l9 5.5M5 10v7M9.5 10v7M14.5 10v7M19 10v7M3.5 20h17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
-  <symbol id="i-engrenagem" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2.8v2.6M12 18.6v2.6M21.2 12h-2.6M5.4 12H2.8M18.5 5.5l-1.8 1.8M7.3 16.7l-1.8 1.8M18.5 18.5l-1.8-1.8M7.3 7.3L5.5 5.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
   <symbol id="i-parar" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="1.5" fill="currentColor"/></symbol>
+  <symbol id="i-dare" viewBox="0 0 24 24"><path d="M6 3h12v18l-2.2-1.4L13.6 21l-1.6-1.4L10.4 21l-2.2-1.4L6 21z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 8h6M9 11.5h6M9 15h3.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
   <symbol id="i-registro" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
 </svg>
 
@@ -40,7 +41,7 @@
       </div>
       <div>
         <div class="marca-nome">Central de Automações</div>
-        <div class="marca-sub">SIGEF · SEI · Banco do Brasil</div>
+        <div class="marca-sub">SIGEF · SEI · DARE · Banco do Brasil</div>
       </div>
     </div>
 
@@ -48,8 +49,8 @@
       <button class="modulo ativo" type="button" data-modulo="sei" aria-current="page">
         <svg class="ic"><use href="#i-doc"/></svg><span><b>Anexar no SEI</b><small>Baixa do SIGEF e inclui no processo</small></span>
       </button>
-      <button class="modulo" type="button" data-modulo="amigo">
-        <svg class="ic"><use href="#i-engrenagem"/></svg><span><b>Gerar no SIGEF</b><small>Amigo · CE, NL, PP e OB</small></span>
+      <button class="modulo" type="button" data-modulo="dare">
+        <svg class="ic"><use href="#i-dare"/></svg><span><b>DARE</b><small>DARE avulso → PDF → SEI</small></span>
       </button>
       <button class="modulo" type="button" data-modulo="bb">
         <svg class="ic"><use href="#i-banco"/></svg><span><b>Banco do Brasil</b><small>Cargas de cartão</small></span>
@@ -63,6 +64,16 @@
       <li data-passo="execucao"><span class="bolha">4</span><span>Baixar e anexar</span></li>
       <li data-passo="conferencia"><span class="bolha">5</span><span>Conferência</span></li>
     </ol>
+
+    <!-- Páginas do DARE: a barra lateral do aplicativo DARE, quando o módulo está aberto -->
+    <nav class="dare-nav" id="dare-nav" aria-label="Páginas do DARE" hidden>
+      <button type="button" data-dare-ir="inicio"><span class="ico">⌂</span><span class="txt">Início</span></button>
+      <button type="button" data-dare-ir="lancamentos"><span class="ico">☰</span><span class="txt">Lançamentos</span><span class="dare-badge" id="dare-badge-lista" hidden></span></button>
+      <button type="button" data-dare-ir="execucao"><span class="ico">▶</span><span class="txt">Execução</span><span class="dare-badge verde" id="dare-badge-exec" hidden>em andamento</span></button>
+      <button type="button" data-dare-ir="arquivos"><span class="ico">▤</span><span class="txt">Arquivos PDF</span></button>
+      <button type="button" data-dare-ir="desempenho"><span class="ico">◔</span><span class="txt">Desempenho</span></button>
+      <button type="button" data-dare-ir="configuracoes"><span class="ico">⚙</span><span class="txt">Configurações</span></button>
+    </nav>
 
     <div class="lateral-rodape">
       <div class="contador" id="contador" hidden>
@@ -422,48 +433,6 @@
       </div>
     </section>
 
-    <!-- ---------- Módulo: Amigo (gerar no SIGEF) ---------- -->
-    <section class="tela" id="tela-amigo" hidden>
-      <header class="cabeca">
-        <p class="sobre">Gerar no SIGEF · Amigo</p>
-        <h1>CE, NL, PP e OB a partir da planilha</h1>
-        <p class="lead">Lê as linhas da planilha Excel e faz, no SIGEF, a automação escolhida. O que for gerado é gravado de volta na planilha, que fica aberta no Excel para você acompanhar.</p>
-      </header>
-
-      <div class="alerta-grande" id="amigo-producao">
-        <svg class="ic"><use href="#i-alerta"/></svg>
-        <div><strong>SIGEF de produção</strong><p>Tudo o que esta automação fizer tem efeito real (<span class="mono" id="amigo-dominio">sigef.sefin.ro.gov.br</span>). Entre no SIGEF pelo Chrome da automação antes de executar.</p></div>
-      </div>
-
-      <div class="formulario modulo-form" id="amigo-form">
-        <div class="campo">
-          <label>Planilha Excel</label>
-          <div class="arquivo-linha">
-            <button class="btn fantasma" type="button" data-escolher-planilha="amigo"><svg class="ic"><use href="#i-planilha"/></svg>Escolher planilha…</button>
-            <span class="arquivo-nome" id="amigo-arquivo">Nenhuma escolhida</span>
-          </div>
-        </div>
-        <div class="grade-campos">
-          <div class="campo"><label for="amigo-aba">Aba</label><select id="amigo-aba"></select></div>
-          <div class="campo"><label for="amigo-linha">Linha inicial</label><input id="amigo-linha" type="number" min="1" step="1"></div>
-          <div class="campo"><label for="amigo-data">Data</label><input id="amigo-data" inputmode="numeric" placeholder="30062026" maxlength="8"><div class="dica">DDMMAAAA, sem barras</div></div>
-          <div class="campo"><label for="amigo-mes">Mês de referência</label><input id="amigo-mes" placeholder="06/2026" maxlength="7"><div class="dica">Sempre o mês anterior</div></div>
-          <div class="campo largo"><label for="amigo-processo">Processo</label><input id="amigo-processo" placeholder="0029.037004/2026-72"></div>
-        </div>
-
-        <fieldset class="campo">
-          <legend>Automação</legend>
-          <div class="opcoes-modulo" id="amigo-programas"></div>
-        </fieldset>
-      </div>
-
-      <div class="acao linha modulo-acoes">
-        <button class="btn primario grande" type="button" id="amigo-executar">Executar <svg class="ic"><use href="#i-seta"/></svg></button>
-        <button class="btn fantasma" type="button" data-parar-modulo hidden><svg class="ic"><use href="#i-parar"/></svg>Parar depois da linha atual</button>
-        <span class="modulo-status" id="amigo-status" role="status"></span>
-      </div>
-    </section>
-
     <!-- ---------- Módulo: Banco do Brasil ---------- -->
     <section class="tela" id="tela-bb" hidden>
       <header class="cabeca">
@@ -542,6 +511,376 @@
       </div>
     </section>
 
+    <!-- ---------- Módulo: DARE (as páginas do aplicativo DARE) ---------- -->
+    <section class="tela" id="tela-dare" hidden>
+
+      <div class="dare-status" role="status">
+        <button class="dare-nav-estado" id="dare-nav-estado" type="button" title="Abrir o navegador da automação">Navegador fechado · abrir</button>
+        <span id="dare-status-estado">Pronto</span>
+        <span id="dare-status-pdfs">PDFs: —</span>
+        <span class="pasta" id="dare-status-pasta"></span>
+        <span style="margin-left:auto" id="dare-status-versao">DARE</span>
+      </div>
+
+      <!-- Início -->
+      <div class="dare-pagina" data-dare-pagina="inicio">
+        <div class="dare-pag-cab">
+          <div>
+            <p class="sobre">DARE avulso → PDF → SEI</p>
+            <h2>Olá! O que vamos fazer hoje?</h2>
+            <p>Gere o DARE avulso, salve o PDF e anexe no processo do SEI — em lotes ou a partir de uma planilha.</p>
+          </div>
+          <div class="dare-acoes">
+            <button class="btn fantasma" type="button" data-dare-acao="importar"><svg class="ic"><use href="#i-planilha"/></svg>Importar planilha</button>
+            <button class="btn primario" type="button" data-dare-acao="novo">＋ Novo lançamento</button>
+          </div>
+        </div>
+        <div id="dare-inicio-avisos"></div>
+        <div class="dare-kpis">
+          <div class="dare-kpi clicavel" id="dare-k-nav" title="Abrir o navegador da automação"><div class="rot">Navegador</div><div class="val">—</div><div class="sub"></div></div>
+          <div class="dare-kpi clicavel" id="dare-k-lista" title="Ver a lista"><div class="rot">Lançamentos na lista</div><div class="val">—</div><div class="sub"></div></div>
+          <div class="dare-kpi" id="dare-k-hoje"><div class="rot">Concluídos hoje</div><div class="val">—</div><div class="sub"></div></div>
+          <div class="dare-kpi clicavel" id="dare-k-pdfs" title="Gerenciar os PDFs"><div class="rot">Pasta dos PDFs</div><div class="val">—</div><div class="sub"></div></div>
+        </div>
+        <div class="dare-grade g2">
+          <div class="dare-cartao">
+            <h3>Últimas execuções</h3>
+            <p class="sub">Os registros completos ficam em dados/historico.csv (abre no Excel).</p>
+            <div class="dare-tabela baixa" id="dare-recentes"></div>
+          </div>
+          <div class="dare-cartao">
+            <h3>Como funciona</h3>
+            <p class="sub"></p>
+            <ol class="dare-passos">
+              <li><span class="num">1</span><div><b>Adicione os lançamentos</b><span>Digite cada um ou importe de uma planilha do Excel.</span></div></li>
+              <li><span class="num">2</span><div><b>Confira a lista</b><span>Edite ou remova antes de começar. Os dados ficam guardados.</span></div></li>
+              <li><span class="num">3</span><div><b>Entre no DARE e no SEI</b><span>Na primeira vez, faça o login nas abas que o programa abre.</span></div></li>
+              <li><span class="num">4</span><div><b>Acompanhe</b><span>Cada lançamento: DARE → PDF → SEI. Se um falhar, o programa segue.</span></div></li>
+            </ol>
+            <p class="dare-mudo" style="margin-top:14px">Atalhos: Ctrl+N novo lançamento · Ctrl+I importar planilha · F5 atualizar</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Lançamentos -->
+      <div class="dare-pagina" data-dare-pagina="lancamentos" hidden>
+        <div class="dare-pag-cab">
+          <div>
+            <h2>Lançamentos</h2>
+            <p>Cada lançamento gera um DARE, salva o PDF e o anexa no processo do SEI.</p>
+          </div>
+          <div class="dare-acoes">
+            <button class="btn fantasma" type="button" id="dare-btn-importar" data-dare-acao="importar"><svg class="ic"><use href="#i-planilha"/></svg>Importar planilha…</button>
+            <button class="btn primario" type="button" id="dare-btn-iniciar">▶ Iniciar processamento</button>
+          </div>
+        </div>
+        <div id="dare-lanc-aviso"></div>
+        <div class="dare-grade form-lista">
+          <form class="dare-cartao" id="dare-form" autocomplete="off" novalidate>
+            <h3 id="dare-form-titulo">Novo lançamento</h3>
+            <p class="sub">Campos com * são obrigatórios. Enter adiciona.</p>
+            <div class="dare-form">
+              <div class="dare-campo" data-campo="processo"><label for="dare-processo">Processo SEI *</label><input id="dare-processo" spellcheck="false"><div class="dica" data-dica="Ex.: 0012.123456/2026-12">Ex.: 0012.123456/2026-12</div></div>
+              <div class="dare-campo" data-campo="cpf"><label for="dare-cpf">CPF do servidor *</label><input id="dare-cpf" inputmode="numeric" spellcheck="false"><div class="dica" data-dica="11 dígitos, com ou sem pontos">11 dígitos, com ou sem pontos</div></div>
+              <div class="dare-campo" data-campo="cnpj"><label for="dare-cnpj">CNPJ do órgão *</label><input id="dare-cnpj" inputmode="numeric" spellcheck="false"><div class="dica" data-dica="Identifica o contribuinte no DARE">Identifica o contribuinte no DARE</div></div>
+              <label class="check"><input type="checkbox" id="dare-mesmo"> Recolhedor é o mesmo CNPJ do órgão</label>
+              <div class="dare-campo" data-campo="recolhedor"><label for="dare-recolhedor">CNPJ do recolhedor *</label><input id="dare-recolhedor" inputmode="numeric" spellcheck="false"><div class="dica" data-dica=""></div></div>
+              <div class="dare-tres">
+                <div class="dare-campo" data-campo="ref"><label for="dare-ref">Referência *</label><input id="dare-ref" inputmode="numeric" spellcheck="false"><div class="dica" data-dica="MMAAAA">MMAAAA</div></div>
+                <div class="dare-campo" data-campo="venc"><label for="dare-venc">Vencimento *</label><input id="dare-venc" spellcheck="false" title="Padrão: 1 mês à frente, em dia útil (sem contar feriados)."><div class="dica" data-dica="DD/MM/AAAA">DD/MM/AAAA</div></div>
+                <div class="dare-campo" data-campo="valor"><label for="dare-valor">Valor (R$) *</label><input id="dare-valor" spellcheck="false" title="A vírgula é colocada automaticamente no site. 7.243 = sete mil duzentos e quarenta e três."><div class="dica" data-dica="Ex.: 7.273,07">Ex.: 7.273,07</div></div>
+              </div>
+              <p class="dare-fixos" id="dare-fixos"></p>
+              <div class="dare-form-botoes">
+                <button class="btn primario" type="submit" id="dare-btn-salvar">＋ Adicionar à lista</button>
+                <button class="btn fantasma" type="button" id="dare-btn-limpar">Limpar</button>
+              </div>
+            </div>
+          </form>
+          <div class="dare-cartao">
+            <h3>Lista para processar</h3>
+            <p class="sub">Clique duas vezes para editar · Delete remove · clique no título da coluna para ordenar.</p>
+            <div class="dare-barra-tab">
+              <button class="btn fantasma pequeno" type="button" id="dare-btn-editar">✎ Editar</button>
+              <button class="btn fantasma pequeno" type="button" id="dare-btn-duplicar">⧉ Duplicar</button>
+              <button class="btn fantasma pequeno" type="button" id="dare-btn-remover">✕ Remover</button>
+              <button class="btn fantasma pequeno dir" type="button" id="dare-btn-esvaziar">Esvaziar lista</button>
+            </div>
+            <div class="dare-tabela selecionavel" id="dare-lista" tabindex="0"></div>
+            <div class="dare-avisos" id="dare-lista-avisos"></div>
+            <div class="dare-total" id="dare-lista-total"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Execução -->
+      <div class="dare-pagina" data-dare-pagina="execucao" hidden>
+        <div class="dare-pag-cab">
+          <div>
+            <h2>Execução</h2>
+            <p id="dare-exec-sub">Nenhum processamento em andamento.</p>
+          </div>
+          <div class="dare-acoes">
+            <button class="btn perigo-contorno" type="button" id="dare-btn-parar" disabled><svg class="ic"><use href="#i-parar"/></svg>Parar após o lançamento atual</button>
+            <button class="btn fantasma" type="button" data-dare-pasta="pdf"><svg class="ic"><use href="#i-pasta"/></svg>Abrir pasta dos PDFs</button>
+          </div>
+        </div>
+        <div id="dare-exec-avisos"></div>
+        <div class="dare-cartao dare-vazio" id="dare-exec-vazio">
+          <div class="grande">▶</div>
+          <h3>Nada sendo processado agora</h3>
+          <p>Monte a lista em Lançamentos e clique em “Iniciar processamento”.<br>O andamento de cada DARE aparece aqui.</p>
+          <button class="btn primario" type="button" data-dare-ir="lancamentos">Ir para Lançamentos</button>
+        </div>
+        <div id="dare-exec-painel" hidden>
+          <div class="dare-cartao" style="margin-bottom:14px">
+            <div class="dare-andamento-topo">
+              <div>
+                <div class="titulo" id="dare-exec-lote"></div>
+                <div class="detalhe" id="dare-exec-detalhe"></div>
+              </div>
+              <div class="dare-numeros">
+                <div class="ok"><strong id="dare-n-ok">—</strong><span>Concluídos</span></div>
+                <div class="erro"><strong id="dare-n-erro">—</strong><span>Com erro</span></div>
+                <div><strong id="dare-n-decorrido">—</strong><span>Decorrido</span></div>
+                <div><strong id="dare-n-restante">—</strong><span>Restante (estim.)</span></div>
+                <div><strong id="dare-n-media">—</strong><span>Média por lote</span></div>
+              </div>
+            </div>
+            <div class="barra" id="dare-exec-barra-caixa"><div class="barra-cheia" id="dare-exec-barra"></div></div>
+            <div class="dare-etapa-atual" id="dare-exec-etapa"></div>
+            <div class="dare-etapas" id="dare-exec-etapas"></div>
+          </div>
+          <div class="dare-grade g2">
+            <div class="dare-cartao">
+              <h3>Lançamentos</h3>
+              <p class="sub">Clique duas vezes num concluído para abrir o PDF.</p>
+              <div class="dare-tabela selecionavel" id="dare-exec-tabela"></div>
+            </div>
+            <div class="dare-cartao">
+              <h3>Registro</h3>
+              <p class="sub">Mensagens do programa (o log completo fica na pasta logs).</p>
+              <pre class="dare-log" id="dare-log"></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Arquivos PDF -->
+      <div class="dare-pagina" data-dare-pagina="arquivos" hidden>
+        <div class="dare-pag-cab">
+          <div>
+            <h2>Arquivos PDF</h2>
+            <p>Veja quanto espaço os DAREs ocupam e escolha quando e o que apagar.</p>
+            <p class="dare-mudo" id="dare-arq-pasta"></p>
+          </div>
+          <div class="dare-acoes">
+            <button class="btn fantasma" type="button" id="dare-arq-atualizar">↻ Atualizar</button>
+            <button class="btn fantasma" type="button" id="dare-arq-alterar">Alterar pasta…</button>
+            <button class="btn fantasma" type="button" data-dare-pasta="pdf"><svg class="ic"><use href="#i-pasta"/></svg>Abrir pasta</button>
+          </div>
+        </div>
+        <div class="dare-kpis">
+          <div class="dare-kpi" id="dare-k-qtd"><div class="rot">Arquivos</div><div class="val">—</div><div class="sub"></div></div>
+          <div class="dare-kpi" id="dare-k-tam"><div class="rot">Espaço ocupado</div><div class="val">—</div><div class="sub"></div></div>
+          <div class="dare-kpi" id="dare-k-antigo"><div class="rot">Mais antigo</div><div class="val">—</div><div class="sub"></div></div>
+          <div class="dare-kpi" id="dare-k-prot"><div class="rot">Não anexados no SEI</div><div class="val">—</div><div class="sub"></div></div>
+        </div>
+        <div class="dare-grade g2">
+          <div class="dare-cartao">
+            <h3>Limpar agora</h3>
+            <p class="sub">Escolha o que apagar. As linhas marcadas em vermelho na lista abaixo mostram exatamente o que será removido.</p>
+            <div class="dare-criterios" id="dare-criterios">
+              <label><input type="radio" name="dare-criterio" value="mais_antigos" checked> PDFs com mais de <input class="dare-input curto" id="dare-dias" type="number" min="0" max="3650"> dias</label>
+              <label><input type="radio" name="dare-criterio" value="ate_data"> PDFs gerados até o dia <input class="dare-input data" id="dare-ate" placeholder="DD/MM/AAAA"> <span class="dare-mudo">(DD/MM/AAAA)</span></label>
+              <label><input type="radio" name="dare-criterio" value="selecionados"> Somente os que eu selecionar na lista</label>
+              <label><input type="radio" name="dare-criterio" value="todos"> Todos os PDFs da pasta</label>
+            </div>
+            <hr class="dare-sep">
+            <label class="check"><input type="checkbox" id="dare-lixeira"> Enviar para a Lixeira (dá para recuperar depois)</label>
+            <label class="check" style="margin-top:6px"><input type="checkbox" id="dare-proteger"> Manter os PDFs de DAREs que não foram anexados no SEI (recomendado)</label>
+            <div class="dare-previa">
+              <span class="txt mudo" id="dare-previa-txt"></span>
+              <button class="btn perigo" type="button" id="dare-btn-apagar" disabled>Apagar PDFs…</button>
+            </div>
+          </div>
+          <div class="dare-cartao">
+            <h3>Limpeza automática</h3>
+            <p class="sub">Opcional. Fica guardado para as próximas vezes.</p>
+            <label class="check"><input type="checkbox" id="dare-auto"> Ao abrir o programa, apagar PDFs antigos</label>
+            <div class="dare-linha-campos" style="padding-left:26px">Antigos = com mais de <input class="dare-input curto" id="dare-auto-dias" type="number" min="1" max="3650"> dias</div>
+            <div style="font-size:14px">Avisar na tela inicial quando a pasta passar de</div>
+            <div class="dare-linha-campos"><input class="dare-input curto" id="dare-aviso-mb" type="number" min="0" max="100000" step="100"> MB <span class="dare-mudo">(0 = nunca avisar)</span></div>
+            <p class="dare-mudo" id="dare-ultima-limpeza" style="margin-top:10px"></p>
+          </div>
+        </div>
+        <div class="dare-cartao">
+          <div class="dare-cartao-cab"><h3>PDFs na pasta</h3><span class="dare-mudo" id="dare-arq-sel"></span></div>
+          <p class="sub">Clique duas vezes para abrir. Ctrl/Shift + clique seleciona vários.</p>
+          <div class="dare-tabela selecionavel" id="dare-arq-tabela"></div>
+        </div>
+      </div>
+
+      <!-- Desempenho -->
+      <div class="dare-pagina" data-dare-pagina="desempenho" hidden>
+        <div class="dare-pag-cab">
+          <div>
+            <h2>Desempenho e diagnóstico</h2>
+            <p>Medições do sistema e da automação, para acompanhamento, estudo e apresentação.</p>
+          </div>
+          <div class="dare-acoes">
+            <button class="btn fantasma" type="button" id="dare-btn-csv">Exportar dados (CSV)…</button>
+            <button class="btn primario" type="button" id="dare-btn-relatorio">Gerar relatório…</button>
+          </div>
+        </div>
+        <div class="abas internas" role="tablist" id="dare-des-abas">
+          <button class="aba ativa" type="button" data-des-aba="auto">Automação</button>
+          <button class="aba" type="button" data-des-aba="monitor">Monitor em tempo real</button>
+          <button class="aba" type="button" data-des-aba="diag">Diagnóstico do sistema</button>
+          <button class="aba" type="button" data-des-aba="testes">Testes de velocidade</button>
+        </div>
+
+        <div data-des-painel="auto">
+          <div class="dare-mini-cab">
+            <label class="check"><input type="checkbox" id="dare-so-sucesso" checked> Estatísticas só com lançamentos concluídos com sucesso</label>
+            <button class="btn fantasma pequeno dir" type="button" id="dare-des-atualizar">↻ Atualizar</button>
+          </div>
+          <div class="dare-kpis k5">
+            <div class="dare-kpi" id="dare-d-lotes"><div class="rot">Lançamentos medidos</div><div class="val">—</div><div class="sub"></div></div>
+            <div class="dare-kpi" id="dare-d-taxa"><div class="rot">Taxa de sucesso</div><div class="val">—</div><div class="sub"></div></div>
+            <div class="dare-kpi" id="dare-d-media"><div class="rot">Tempo médio / lote</div><div class="val">—</div><div class="sub"></div></div>
+            <div class="dare-kpi" id="dare-d-hora"><div class="rot">Lotes por hora</div><div class="val">—</div><div class="sub"></div></div>
+            <div class="dare-kpi" id="dare-d-conexao"><div class="rot">Conexão ao navegador</div><div class="val">—</div><div class="sub"></div></div>
+          </div>
+          <p class="dare-texto" id="dare-des-vazio" hidden>Ainda não há medições. Os tempos são registrados automaticamente a cada lançamento processado por este aplicativo.</p>
+          <div class="dare-grade g2">
+            <div class="dare-cartao">
+              <h3>Tempo médio por etapa</h3>
+              <p class="sub">Em âmbar, a etapa mais demorada (gargalo).</p>
+              <div id="dare-g-etapas"></div>
+              <p class="dare-texto" id="dare-gargalo" style="margin-top:8px"></p>
+            </div>
+            <div class="dare-cartao">
+              <h3>Divisão do tempo</h3>
+              <p class="sub">Quanto de cada lançamento vai para o DARE e para o SEI.</p>
+              <div class="dare-divisao" id="dare-divisao"></div>
+              <p class="dare-texto" id="dare-divisao-txt"></p>
+              <hr class="dare-sep">
+              <b style="font-size:13.5px">Como os tempos são medidos</b>
+              <p class="dare-texto">Cada etapa é cronometrada com relógio de alta resolução no momento em que o programa a inicia. Os dados ficam em dados/desempenho.csv (sem CPF nem processo) e podem ser exportados para o Excel.</p>
+            </div>
+          </div>
+          <div class="dare-grade g11">
+            <div class="dare-cartao">
+              <h3>Tempo de cada lançamento</h3>
+              <p class="sub">Últimos 60, em segundos (linha = tempo total).</p>
+              <div id="dare-g-lotes"></div>
+            </div>
+            <div class="dare-cartao">
+              <h3>Lançamentos por dia</h3>
+              <p class="sub">Últimos 14 dias, a partir do histórico.</p>
+              <div id="dare-g-dias"></div>
+            </div>
+          </div>
+          <div class="dare-cartao">
+            <h3>Estatística descritiva (segundos)</h3>
+            <p class="sub">n = amostras · P95 = 95% dos lotes levaram até este tempo · CV = desvio ÷ média (variabilidade).</p>
+            <div class="dare-tabela" id="dare-estat"></div>
+          </div>
+        </div>
+
+        <div data-des-painel="monitor" hidden>
+          <div class="dare-mini-cab">
+            <button class="btn primario" type="button" id="dare-btn-monitor">▶ Iniciar monitor</button>
+            <span class="dare-texto" id="dare-monitor-txt">Mede o uso do computador a cada segundo (últimos 2 minutos). Deixe ligado durante um processamento para ver o impacto da automação.</span>
+          </div>
+          <div class="dare-kpis k5">
+            <div class="dare-kpi" id="dare-m-cpu"><div class="rot">CPU do computador</div><div class="val">—</div><div class="sub"></div></div>
+            <div class="dare-kpi" id="dare-m-ram"><div class="rot">Memória em uso</div><div class="val">—</div><div class="sub"></div></div>
+            <div class="dare-kpi" id="dare-m-app"><div class="rot">Este programa</div><div class="val">—</div><div class="sub"></div></div>
+            <div class="dare-kpi" id="dare-m-nav"><div class="rot">Navegador</div><div class="val">—</div><div class="sub"></div></div>
+            <div class="dare-kpi" id="dare-m-rede"><div class="rot">Rede</div><div class="val">—</div><div class="sub"></div></div>
+          </div>
+          <div class="dare-grade g11">
+            <div class="dare-cartao"><h3>Processador e memória (%)</h3><p class="sub"></p><div id="dare-g-cpu"></div></div>
+            <div class="dare-cartao"><h3>Rede e disco (KB/s)</h3><p class="sub"></p><div id="dare-g-io"></div></div>
+          </div>
+        </div>
+
+        <div data-des-painel="diag" hidden>
+          <div class="dare-mini-cab">
+            <button class="btn primario" type="button" id="dare-btn-diag">↻ Executar diagnóstico</button>
+            <span class="dare-texto" id="dare-diag-txt">Confere o computador, os componentes do programa e a conexão com o DARE e o SEI.</span>
+          </div>
+          <div class="dare-tabela" id="dare-diag-tabela" style="max-height:none"></div>
+        </div>
+
+        <div data-des-painel="testes" hidden>
+          <div class="dare-mini-cab">
+            <button class="btn primario" type="button" id="dare-btn-testes">▶ Executar testes</button>
+            <span class="dare-texto" id="dare-testes-txt">Testes padronizados (≈10 s) de CPU, memória, disco e rede. Rode em computadores diferentes para comparar.</span>
+          </div>
+          <div class="barra" id="dare-testes-barra-caixa" hidden><div class="barra-cheia" id="dare-testes-barra"></div></div>
+          <div class="dare-cartao" style="margin-bottom:14px">
+            <h3>Resultados</h3>
+            <p class="sub">Comparação: diferença em relação à média das rodadas anteriores neste computador.</p>
+            <div class="dare-tabela" id="dare-testes-tabela"></div>
+          </div>
+          <div class="dare-cartao">
+            <h3>Rodadas anteriores</h3>
+            <p class="sub">Guardadas em dados/benchmarks.json.</p>
+            <div class="dare-tabela baixa" id="dare-testes-hist"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Configurações -->
+      <div class="dare-pagina" data-dare-pagina="configuracoes" hidden>
+        <div class="dare-pag-cab">
+          <div>
+            <h2>Configurações e sobre</h2>
+            <p>Versão do DARE, navegador usado e onde ficam os arquivos.</p>
+          </div>
+        </div>
+        <div class="dare-grade g11">
+          <div class="dare-cartao">
+            <h3>Sobre o DARE</h3>
+            <p class="sub"></p>
+            <div><span class="dare-versao" id="dare-cfg-versao">—</span> <span class="dare-mudo" id="dare-cfg-data"></span></div>
+            <p class="dare-texto" id="dare-cfg-modo" style="margin-top:10px"></p>
+            <p class="dare-texto" style="margin-top:8px">Automatiza o fluxo DARE avulso → PDF → documento externo no SEI, em lotes digitados ou lidos de planilhas do Excel.</p>
+            <p class="dare-mudo" style="margin-top:8px">Software proprietário · © 2026 · uso restrito a pessoas autorizadas pelo titular.</p>
+            <div class="dare-acoes" style="margin-top:12px">
+              <button class="btn fantasma pequeno" type="button" data-dare-recurso="GUIA_DE_USO.html">Guia de uso</button>
+              <button class="btn fantasma pequeno" type="button" data-dare-recurso="LICENCA.txt">Licença</button>
+            </div>
+          </div>
+          <div class="dare-cartao">
+            <h3>Navegador</h3>
+            <p class="sub">O DARE usa o Chrome da automação — o mesmo do SIGEF → SEI e do BB —, com o login do DARE e do SEI salvo nele.</p>
+            <b id="dare-cfg-nav" style="font-size:14px"></b>
+            <p class="dare-mudo" id="dare-cfg-exe"></p>
+            <p class="dare-texto" id="dare-cfg-edge" hidden style="margin-top:6px">O Google Chrome não foi encontrado; o Microsoft Edge está sendo usado no lugar.</p>
+            <p class="dare-mudo" id="dare-cfg-perfil" style="margin-top:6px"></p>
+            <label class="check" style="margin-top:10px"><input type="checkbox" id="dare-cfg-abrir"> Abrir o navegador (SEI e DARE) ao abrir o DARE</label>
+            <div style="margin-top:8px"><button class="btn fantasma pequeno" type="button" data-dare-acao="abrir_navegador">Abrir navegador agora</button></div>
+          </div>
+        </div>
+        <div class="dare-grade g11">
+          <div class="dare-cartao">
+            <h3>Pastas e arquivos</h3>
+            <p class="sub">Os dados ficam no seu computador. PDFs, dados e logs contêm CPF e nomes: não compartilhe (LGPD).</p>
+            <div id="dare-cfg-pastas"></div>
+          </div>
+          <div class="dare-cartao">
+            <h3>Valores fixos do DARE e do SEI</h3>
+            <p class="sub">Definidos em automacoes/dare/config.py.</p>
+            <dl class="dare-chaves" id="dare-cfg-fixos"></dl>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- ---------- Registro (log) ---------- -->
     <details class="registro" id="registro">
       <summary><svg class="ic"><use href="#i-registro"/></svg>Registro detalhado <span class="qtd" id="registro-qtd"></span></summary>
@@ -585,7 +924,78 @@
   </div>
 </div>
 
+<!-- DARE: confirmações (no lugar das caixas "Sim/Não" do aplicativo DARE) -->
+<div class="modal dare-modal" id="dare-confirma" hidden>
+  <div class="modal-caixa" role="dialog" aria-modal="true" aria-labelledby="dare-confirma-titulo">
+    <h3 id="dare-confirma-titulo">DARE</h3>
+    <p class="msg" id="dare-confirma-msg"></p>
+    <div class="botoes" id="dare-confirma-botoes"></div>
+  </div>
+</div>
+
+<!-- DARE: Importar planilha (a janela "Importar planilha" do aplicativo DARE) -->
+<div class="modal dare-modal grande" id="dare-importar" hidden>
+  <div class="modal-caixa" role="dialog" aria-modal="true" aria-labelledby="dare-imp-titulo">
+    <div class="topo">
+      <h2 id="dare-imp-titulo" style="margin:0 0 4px">Importar planilha</h2>
+      <p class="nota" id="dare-imp-modo"></p>
+    </div>
+    <div class="corpo">
+      <div class="dare-cartao">
+        <h3>1 · Escolha a planilha</h3>
+        <p class="sub">Uma linha da planilha = um DARE.</p>
+        <div id="dare-imp-abertas-caixa">
+          <div class="dare-cartao-cab" style="margin-bottom:4px"><b style="font-size:13.5px">Planilhas abertas no Excel agora:</b><button class="btn fantasma pequeno" type="button" id="dare-imp-recarregar" title="Atualizar a lista">↻</button></div>
+          <div class="dare-abertas" id="dare-imp-abertas"></div>
+        </div>
+        <div class="dare-acoes" style="margin-top:10px">
+          <button class="btn primario pequeno" type="button" id="dare-imp-procurar">Procurar arquivo…</button>
+          <button class="btn fantasma pequeno" type="button" id="dare-imp-modelo">Criar planilha modelo</button>
+        </div>
+        <p class="dare-texto" id="dare-imp-arquivo" style="margin-top:10px">Nenhuma planilha escolhida.</p>
+      </div>
+      <div class="dare-cartao">
+        <h3>2 · Aba e cabeçalho</h3>
+        <p class="sub">O programa procura sozinho a linha com os títulos das colunas.</p>
+        <div class="dare-linha-campos">
+          <b>Aba</b> <select class="dare-input" id="dare-imp-aba" style="width:240px"></select>
+          <b style="margin-left:14px">Linha do cabeçalho</b> <input class="dare-input curto" id="dare-imp-cab" type="number" min="0" max="500">
+          <span class="dare-mudo">(0 = sem cabeçalho)</span>
+        </div>
+        <p class="dare-mudo" id="dare-imp-colunas"></p>
+      </div>
+      <div class="dare-cartao">
+        <h3>3 · De onde vem cada informação</h3>
+        <p class="sub">Escolha a coluna de cada campo. Use “mesmo valor em todas as linhas” para algo que nunca muda (ex.: o CNPJ do órgão). * = obrigatório.</p>
+        <p class="dare-mudo" id="dare-imp-origem" style="margin-bottom:6px"></p>
+        <div class="dare-mapa" id="dare-imp-mapa"></div>
+        <p class="rel-erro" id="dare-imp-falta" style="margin-top:6px"></p>
+      </div>
+      <div class="dare-cartao">
+        <h3>4 · Linhas e leitura</h3>
+        <p class="sub">Linhas em branco e linhas ocultas/filtradas são puladas.</p>
+        <div class="dare-linha-campos">
+          <b>Da linha</b> <input class="dare-input curto" id="dare-imp-de" type="number" min="1">
+          <b>até a linha</b> <input class="dare-input curto" id="dare-imp-ate" type="number" min="1">
+          <button class="btn primario pequeno" type="button" id="dare-imp-ler" style="margin-left:8px">Ler planilha</button>
+        </div>
+        <p class="dare-mudo" id="dare-imp-ultima"></p>
+        <p class="dare-leitura" id="dare-imp-leitura"></p>
+        <div class="dare-tabela baixa" id="dare-imp-problemas" hidden></div>
+      </div>
+    </div>
+    <div class="rodape">
+      <span class="txt" id="dare-imp-rodape">Escolha a planilha, confira as colunas e clique em “Ler planilha”.</span>
+      <button class="btn fantasma" type="button" id="dare-imp-cancelar">Cancelar</button>
+      <button class="btn primario" type="button" id="dare-imp-adicionar" disabled>Adicionar à lista</button>
+    </div>
+  </div>
+</div>
+
+<div class="dare-toasts" id="dare-toasts" aria-live="polite"></div>
+
 <script src="modulos.js"></script>
+<script src="dare.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

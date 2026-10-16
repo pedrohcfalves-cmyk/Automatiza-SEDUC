@@ -1,6 +1,6 @@
 # O instalador (`Instalar Automacao SIGEF-SEI <versão>.exe`)
 
-Programa com janela própria (`app_janela.py` + `interface/`), empacotado
+Programa com janela própria (`app_janela.py` + `janela/`), empacotado
 com o Python e as bibliotecas dentro. Quem instala **não precisa de
 Python**, nem de senha de administrador: vai para
 `%LOCALAPPDATA%\Programs\Automacao SIGEF-SEI`, com atalho no Menu Iniciar
@@ -35,7 +35,7 @@ Sai em `dist/`:
 
 ```
 dist/Automacao SIGEF-SEI/                  o programa, sem instalador
-dist/Instalar Automacao SIGEF-SEI 2.0.exe  o que se leva para as máquinas
+dist/Instalar Automacao SIGEF-SEI 3.7.exe  o que se leva para as máquinas
 ```
 
 Instalar uma versão nova por cima da antiga substitui o programa (o
@@ -45,8 +45,10 @@ Instalar uma versão nova por cima da antiga substitui o programa (o
 
 ```
 construir.py       roda tudo: versão do .exe, PyInstaller, Inno Setup
-app_janela.spec    o que o PyInstaller empacota
+app_janela.spec    o que o PyInstaller empacota (app_janela.py, automacoes/,
+                   janela/ e a interface em janela/interface)
 instalador.iss     o Setup.exe: pasta, atalhos, desinstalador, aviso do WebView2
+                   e o termo de uso (../LICENCA.txt, com "Eu aceito")
 ```
 
 ## Testar a janela sem empacotar
@@ -56,5 +58,5 @@ python app_janela.py
 ```
 
 Só o layout, sem SIGEF/SEI, num navegador comum: abra
-`interface/index.html?demo` servido por `python -m http.server` dentro de
-`interface/` — a página roda uma simulação do fluxo inteiro.
+`index.html?demo` servido por `python -m http.server` dentro de
+`janela/interface/` — a página roda uma simulação do fluxo inteiro.

@@ -1128,6 +1128,19 @@ class ExcelCOM:
         except Exception:
             pass
 
+        if self.livro is None and planilha_aberta_no_excel(self.caminho):
+            # O Excel da pessoa (aberto por abrir_planilha_no_excel ou à mão)
+            # nem sempre aparece no GetActiveObject logo de cara -- ele só se
+            # registra depois de perder o foco. A pasta de trabalho, sim: o
+            # GetObject pelo caminho acha a que JÁ está aberta. Sem isso, cada
+            # gravação abria um Excel novo e fechava de novo.
+            try:
+                livro = win32com.client.GetObject(self.caminho)
+                self.excel, self.livro = livro.Application, livro
+                self._excel_nosso = False
+            except Exception:
+                pass
+
         if self.livro is None:
             self.livro = self.excel.Workbooks.Open(self.caminho)
             self._livro_nosso = True
@@ -1142,10 +1155,21 @@ class ExcelCOM:
 
     def __exit__(self, *_erro):
         try:
-            if self.livro is not None and self._livro_nosso:
-                self.livro.Close(SaveChanges=True)
-            if self.excel is not None and self._excel_nosso:
-                self.excel.Quit()
+            if self.visivel and (self._livro_nosso or self._excel_nosso):
+                # Modo VISÍVEL: a planilha fica aberta para acompanhar, e a
+                # próxima gravação usa esta mesma janela -- nada de abrir e
+                # fechar o Excel a cada linha. UserControl mantém o Excel
+                # vivo depois que a conversa COM termina.
+                if self.livro is not None:
+                    self.livro.Save()
+                if self.excel is not None:
+                    self.excel.Visible = True
+                    self.excel.UserControl = True
+            else:
+                if self.livro is not None and self._livro_nosso:
+                    self.livro.Close(SaveChanges=True)
+                if self.excel is not None and self._excel_nosso:
+                    self.excel.Quit()
         except Exception:
             pass
         self.excel = self.livro = self.planilha = None
@@ -1217,6 +1241,17 @@ class ExcelCOM:
                 except Exception:
                     pass
         self.salvar()
+
+
+def planilha_aberta_no_excel(caminho):
+    """
+    True se algum Excel está com o arquivo aberto para edição: o Excel cria
+    ao lado dele o arquivo de dono "~$<nome>" (em nomes longos, "~$" entra
+    no lugar dos dois primeiros caracteres).
+    """
+    pasta, nome = os.path.split(os.path.abspath(caminho))
+    return any(os.path.exists(os.path.join(pasta, candidato))
+               for candidato in ("~$" + nome, "~$" + nome[2:]))
 
 
 def excel_utilizavel(caminho):
@@ -2965,7 +3000,7 @@ def definir_rota_cartao(rota):
     ROTA_CARTAO = rota
 
 
-def preparar_sessao_orgao(page):
+def preparar_sessao_orgao(page, timeout=15000):
     """
     Menu > Cartão > Órgão > Portador, até o campo 'Número do cartão'
     (input numeroPlasticoFormatado). Guarda o endereço da tela para as
@@ -2980,15 +3015,20 @@ def preparar_sessao_orgao(page):
         "li.item-menu-terceiro-nivel:visible", has_text=re.compile(r"^\s*Portador\s*$")).first
     try:
         clicar_com_confirmacao(icone_menu, "ícone do menu (☰)",
-                               aguardar_apos=item_cartao, usar_hover=False)
-        clicar_com_confirmacao(item_cartao, "menu 'Cartão'", aguardar_apos=item_orgao)
+                               aguardar_apos=item_cartao, usar_hover=False, timeout=timeout)
+        clicar_com_confirmacao(item_cartao, "menu 'Cartão'", aguardar_apos=item_orgao,
+                               timeout=timeout)
         clicar_com_confirmacao(item_orgao, "submenu 'Órgão' (2º nível)",
-                               aguardar_apos=item_portador)
-        clicar_com_confirmacao(item_portador, "opção 'Portador' do Órgão (3º nível)")
-        esperar_carregamento_sumir(page)
-        esperar_rede_ociosa(page)
-        campo = localizar_campo_cartao(page, timeout=30000)
+                               aguardar_apos=item_portador, timeout=timeout)
+        clicar_com_confirmacao(item_portador, "opção 'Portador' do Órgão (3º nível)",
+                               timeout=timeout)
+        esperar_carregamento_sumir(page, intervalo=150)
+        campo = localizar_campo_cartao(page, timeout=max(timeout, 15000))
     except Exception as erro:
+        try:
+            salvar_debug_da_tela(page, "rota_orgao")
+        except Exception:
+            pass
         raise ErroDeUso(
             "Não consegui abrir Cartão > Órgão > Portador no menu do BB "
             f"({str(erro).splitlines()[0]}). Confira se o portal está logado e "
@@ -3001,25 +3041,41 @@ def preparar_sessao_orgao(page):
     return campo
 
 
+def abrir_rota_orgao_inicial(page):
+    """
+    1ª entrada na rota do Órgão, no começo da rodada. Se falhar, volta ao
+    painel inicial do portal e tenta mais uma vez antes de desistir da rodada.
+    """
+    try:
+        return preparar_sessao_orgao(page)
+    except ErroDeUso as erro:
+        msg_alerta(f"{erro} Voltando ao painel inicial e tentando de novo...")
+    page.goto(URL_DASHBOARD)
+    page.wait_for_load_state("domcontentloaded")
+    esperar_carregamento_sumir(page, intervalo=150)
+    return preparar_sessao_orgao(page)
+
+
 def ir_para_tela_cartao_orgao(page):
     """
     De volta ao campo do cartão pela rota do Órgão: pelo endereço guardado
     (com recarga, porque é rota de hash) e, se não der, pelo menu de novo.
     Nunca pela URL do portador (VP33-A2).
     """
+    # O menu leva ~1s; o endereço guardado, depois de uma tela de erro,
+    # chegou a custar 30s (a rota de hash não recarrega a tela sozinha).
+    # Então: menu primeiro, com prazo curto; endereço + recarga de reserva;
+    # por fim o menu de novo, com o prazo normal.
+    try:
+        return preparar_sessao_orgao(page, timeout=5000)
+    except ErroDeUso:
+        pass
     if URL_CARTAO_ORGAO:
         try:
             page.goto(URL_CARTAO_ORGAO)
-            page.wait_for_load_state("domcontentloaded")
-            esperar_rede_ociosa(page)
-            return localizar_campo_cartao(page, timeout=15000)
-        except (TimeoutError, PlaywrightError):
-            pass
-        try:
             page.reload(wait_until="domcontentloaded", timeout=60000)
-            esperar_rede_ociosa(page)
-            esperar_carregamento_sumir(page)
-            return localizar_campo_cartao(page, timeout=20000)
+            esperar_carregamento_sumir(page, intervalo=150)
+            return localizar_campo_cartao(page, timeout=15000)
         except (TimeoutError, PlaywrightError):
             pass
     msg_alerta("Voltando ao campo do cartão pelo menu (Cartão > Órgão > Portador).")
@@ -3202,7 +3258,7 @@ def ir_para_tela_portador(page):
          ficar preso na tela de demonstrativos do cartão anterior.
     """
     try:
-        return localizar_campo_cartao(page, timeout=4000)
+        return localizar_campo_cartao(page, timeout=1500 if ROTA_CARTAO == "orgao" else 4000)
     except TimeoutError:
         pass
 
@@ -4222,7 +4278,8 @@ def elemento_visivel(page, seletor):
 
 JS_CENTRO_CUSTO = r"""
 () => {
-  const re = /^\s*\d+\s*-\s*\S/;
+  // "44 - CARLOS GOMES" e também "3.261 - CEI XIJAN OM TOC" (milhar com ponto).
+  const re = /^\s*\d[\d.]*\s*-\s*\S/;
   const labels = [...document.querySelectorAll('label')]
     .filter(l => l.offsetParent !== null && re.test(l.innerText || ''));
   const perto = labels.find(l => {
@@ -4253,7 +4310,7 @@ def ler_centro_custo(page, timeout=10000, intervalo=300):
 
 def nome_centro_custo(texto):
     """'44 - CARLOS GOMES' -> '44 CARLOS GOMES' (para nome de arquivo)."""
-    return _sanitizar_nome(re.sub(r"^\s*(\d+)\s*-\s*", r"\1 ", texto))
+    return _sanitizar_nome(re.sub(r"^\s*(\d[\d.]*)\s*-\s*", r"\1 ", texto))
 
 
 def clicar_portador(page, linha):
@@ -4365,11 +4422,21 @@ def abrir_cartao(page, linha):
     if not linha.portador:
         linha.portador = " ".join(portador.inner_text().split())
 
+    # O centro de custo ('44 - CARLOS GOMES', '3.261 - CEI ...') só dá NOME aos
+    # PDFs e ao documento no SEI. Se a tela não tiver o label, vale o nome do
+    # portador (gestora). A tela já carregou aqui (o portador apareceu): 1s basta.
     if not linha.centro_custo:
-        linha.centro_custo = ler_centro_custo(page, timeout=5000, intervalo=150)
-    if not linha.centro_custo:
-        raise ErroDeCarga("não achei o centro de custo na tela (label 'NN - NOME')")
-    print(f"[OK] Centro de custo: {linha.centro_custo}  ·  Portador: {linha.portador}")
+        linha.centro_custo = ler_centro_custo(page, timeout=1000, intervalo=150)
+    if linha.centro_custo:
+        print(f"[OK] Centro de custo: {linha.centro_custo}  ·  Portador: {linha.portador}")
+    elif linha.portador:
+        linha.centro_custo = linha.portador
+        print(f"[OK] Sem centro de custo na tela; nome dos arquivos pelo portador/gestora: "
+              f"{linha.portador}")
+    else:
+        linha.centro_custo = f"cartao final {linha.digitos_cartao[-4:]}"
+        msg_alerta(f"Sem centro de custo nem nome do portador na tela; arquivos como "
+                   f"'{linha.centro_custo}'.")
 
 
 def abrir_limites(page, linha):
@@ -4657,9 +4724,14 @@ def proximo_cartao_rapido(page):
     """
     cliques = 0
     fim = time.time() + 15
+    # Tela sem campo e sem botão (ex.: a de "problema técnico" depois de um
+    # erro no cartão): em 1,5s sem nada clicável, desiste dos botões e vai
+    # pelo caminho direto -- antes esperava os 15s inteiros.
+    sem_nada_desde = time.time()
     while time.time() < fim and cliques <= 4:
         if elemento_visivel(page, SELETOR_CAMPO_CARTAO) is not None:
             return
+        clicou = False
         for seletor, descricao in ((SELETOR_BOTAO_NOVA, "botão 'Nova'"),
                                    (SELETOR_BOTAO_VOLTAR, "botão 'Voltar'")):
             botao = elemento_visivel(page, f"{seletor}:not([data-bb-clicado])")
@@ -4670,9 +4742,14 @@ def proximo_cartao_rapido(page):
                 except Exception:
                     pass
                 cliques += 1
+                clicou = True
                 break
+        if clicou:
+            sem_nada_desde = time.time()
+        elif time.time() - sem_nada_desde > 1.5:
+            break
         page.wait_for_timeout(150)
-    msg_alerta("Não voltei ao campo do cartão pelos botões; vou pela URL do portador.")
+    msg_alerta("Não voltei ao campo do cartão pelos botões; vou pelo caminho direto.")
 
 
 def reabrir_cartao_apos_carga(page, linha):
@@ -4790,7 +4867,10 @@ def processar_carga(page, linha, simulacao, gravador):
         return "CARREGADO", f"carga feita, mas o novo saldo falhou: " \
                             f"{str(erro).splitlines()[0]}", arquivos
 
-    gravador.agora(linha.numero, MARCA_CARGA_OK)
+    # O "carregado" (síncrono, logo depois do Confirmar) já impede carga
+    # dupla; o "ok" só completa a marca -- vai em segundo plano e o próximo
+    # cartão começa sem esperar o Excel.
+    gravador.depois(linha.numero, MARCA_CARGA_OK)
     return "OK", f"R$ {formatar_milhar(novo)}", arquivos
 
 
@@ -4955,7 +5035,7 @@ def executar_carga_limite(cfg):
             browser = conectar_navegador(playwright)
             page = obter_pagina_bb(browser, cfg)
             definir_rota_cartao("orgao")
-            preparar_sessao_orgao(page)
+            abrir_rota_orgao_inicial(page)
 
             for indice, linha in enumerate(linhas, start=1):
                 if parada_pedida():
@@ -5717,7 +5797,7 @@ def executar_carga_avulsa(cfg):
             browser = conectar_navegador(playwright)
             page = obter_pagina_bb(browser, cfg)
             definir_rota_cartao("orgao")
-            preparar_sessao_orgao(page)
+            abrir_rota_orgao_inicial(page)
             manter_sessao_viva(page, forcar=True)
             try:
                 situacao, detalhe, _arquivos = processar_carga(page, linha, simulacao, gravador)
@@ -5970,8 +6050,16 @@ def abrir_planilha_no_excel(cfg):
     if tem_pywin32():
         try:
             if hasattr(os, "startfile"):
-                os.startfile(caminho)  # type: ignore[attr-defined]
-                msg_ok(f"Planilha aberta: {nome}")
+                ja_aberta = planilha_aberta_no_excel(caminho)
+                if not ja_aberta:
+                    os.startfile(caminho)  # type: ignore[attr-defined]
+                    # Espera o Excel terminar de abrir antes da primeira
+                    # leitura/gravação; senão ela abre um SEGUNDO Excel.
+                    fim = time.time() + 30
+                    while time.time() < fim and not planilha_aberta_no_excel(caminho):
+                        time.sleep(0.5)
+                    time.sleep(1.0)
+                msg_ok(f"Planilha {'já estava aberta' if ja_aberta else 'aberta'}: {nome}")
                 msg_dica("A coluna J vai ser preenchida ao vivo, pelo próprio Excel.")
                 return
         except Exception as erro:

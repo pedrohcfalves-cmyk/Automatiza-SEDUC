@@ -1,9 +1,8 @@
-/* Módulos da barra lateral: Anexar no SEI (app.js), Gerar no SIGEF
- * (Amigo) e Banco do Brasil.
+/* Módulos da barra lateral: Anexar no SEI (app.js), DARE (dare.js) e Banco do Brasil.
  *
  * app.js expõe window.lbaModulos.ganchos (api, mostrar a tela do SEI,
- * registrar tratadores de evento). Aqui ficam só a troca de módulo e as
- * duas telas novas, que são simples: formulário -> Executar -> registro.
+ * registrar tratadores de evento). Aqui ficam só a troca de módulo e a
+ * tela do BB, que é simples: formulário -> Executar -> registro.
  */
 (function () {
   "use strict";
@@ -15,8 +14,8 @@
 
   const m = {
     atual: "sei",
-    rodando: null,            // "amigo" | "bb" | null
-    carregado: { amigo: false, bb: false },
+    rodando: null,            // "bb" | null
+    carregado: { bb: false },
     bb: { automacoes: [], pasta: "", palavra: "CARREGAR" },
   };
   let g = null;               // ganchos do app.js
@@ -32,12 +31,20 @@
     });
     $("passos").hidden = modulo !== "sei";
     $("contador").style.display = modulo === "sei" ? "" : "none";
+    // O DARE troca os passos do SEI pelas páginas dele (como a barra lateral do aplicativo DARE).
+    const dare = window.lbaDare;
+    if ($("dare-nav")) $("dare-nav").hidden = modulo !== "dare";
+    if (dare && modulo !== "dare") dare.esconder();
     if (modulo === "sei") {
       g.mostrarSei();
       return;
     }
     document.querySelectorAll(".tela").forEach((s) => (s.hidden = s.id !== `tela-${modulo}`));
     document.querySelector(".conteudo").scrollTop = 0;
+    if (modulo === "dare") {
+      if (dare) dare.mostrar();
+      return;
+    }
     if (!m.carregado[modulo]) carregar(modulo);
   }
 
@@ -104,49 +111,7 @@
     }
     m.carregado[modulo] = true;
     status(modulo, "");
-    (modulo === "amigo" ? preencherAmigo : preencherBb)(r);
-  }
-
-  // ------------------------------------------------------------- Amigo
-
-  function preencherAmigo(r) {
-    const c = r.config;
-    mostrarArquivo("amigo", c.caminho_planilha);
-    preencherAbas($("amigo-aba"), r.abas, c.aba_planilha);
-    $("amigo-linha").value = c.linha_inicial || 2;
-    $("amigo-data").value = c.data || "";
-    $("amigo-mes").value = c.mes_referencia || "";
-    $("amigo-processo").value = c.processo || "";
-    $("amigo-dominio").textContent = r.dominio || "";
-    opcoes(
-      $("amigo-programas"), "amigo-prog",
-      r.programas.map((p) => ({ valor: p.numero, nome: `${p.numero} · ${p.nome}` })),
-      lembrar("amigo-prog") || ""
-    );
-  }
-
-  function valoresAmigo() {
-    return {
-      caminho_planilha: $("amigo-arquivo").dataset.caminho || "",
-      aba_planilha: $("amigo-aba").value,
-      linha_inicial: $("amigo-linha").value,
-      data: $("amigo-data").value,
-      mes_referencia: $("amigo-mes").value,
-      processo: $("amigo-processo").value,
-    };
-  }
-
-  async function executarAmigo() {
-    const numero = escolhida("amigo-prog");
-    if (!numero) return status("amigo", "Escolha a automação.", "erro");
-    const v = valoresAmigo();
-    if (!v.caminho_planilha) return status("amigo", "Escolha a planilha Excel.", "erro");
-    if (v.data && !/^\d{8}$/.test(v.data)) return status("amigo", "A data vai com 8 números, sem barras: 30062026.", "erro");
-    if (v.mes_referencia && !/^\d{2}\/\d{4}$/.test(v.mes_referencia)) return status("amigo", "O mês de referência vai como 06/2026.", "erro");
-    guardar("amigo-prog", numero);
-    if (!g.api()) return demoRodar("amigo", "Amigo · demonstração");
-    const r = await g.api().amigo_executar(v, Number(numero));
-    if (!r.ok) status("amigo", r.erro || "Não consegui começar.", "erro");
+    preencherBb(r);
   }
 
   // ---------------------------------------------------------------- BB
@@ -284,13 +249,6 @@
   // --------------------------------------------------------- Demonstração
 
   const DEMO = {
-    amigo: {
-      ok: true,
-      dominio: "sigef.sefin.ro.gov.br",
-      abas: ["Planilha1", "PNAE"],
-      config: { caminho_planilha: "C:\\Planilhas\\AGOSTO.xlsx", aba_planilha: "Planilha1", linha_inicial: 611, data: "10092026", mes_referencia: "08/2026", processo: "0029.049213/2026-69" },
-      programas: ["CE", "Raspar CE", "NL", "Raspar NL", "PP", "Raspar PP", "Raspar contas", "Gerar OB", "Raspar OB", "Confirmar OB"].map((nome, i) => ({ numero: i + 1, nome })),
-    },
     bb: {
       ok: true,
       pasta: "",
@@ -327,6 +285,7 @@
   function ligar(ganchos) {
     g = ganchos;
     g.registrarEventos(eventos);
+    if (window.lbaDare) window.lbaDare.ligar(ganchos);
 
     document.querySelectorAll(".modulo").forEach((b) => (b.onclick = () => trocar(b.dataset.modulo)));
 
@@ -341,7 +300,6 @@
       };
     });
 
-    $("amigo-executar").onclick = executarAmigo;
     $("bb-executar").onclick = executarBb;
     $("bb-automacoes").addEventListener("change", ajustarBb);
     $("bb-modo").addEventListener("change", ajustarBb);

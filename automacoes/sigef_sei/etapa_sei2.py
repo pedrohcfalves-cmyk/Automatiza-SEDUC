@@ -41,7 +41,8 @@ conforme a tela: por isso _procurar_lugar() varre uma LISTA de lugares
 candidatos em vez de fixar um seletor.
 
 Ponto de entrada do programa: main.py. Rodando este arquivo direto, ele
-anexa um processo já baixado, sem repetir o download.
+anexa um processo já baixado, sem repetir o download (da pasta do
+programa: `python -m automacoes.sigef_sei.etapa_sei2`).
 """
 import glob
 import json
@@ -55,7 +56,7 @@ import unicodedata
 from playwright.sync_api import Error as PlaywrightError, TimeoutError as PlaywrightTimeoutError
 
 # etapa_listar_baixar.py é o arquivo de utilitários deste fluxo.
-from etapa_listar_baixar import (
+from .etapa_listar_baixar import (
     PASTA_BASE,
     URL_SEI,
     abrir_processo_sei,
@@ -1957,7 +1958,7 @@ if __name__ == "__main__":
     #
     # Passa pelo mesmo passo 0 da etapa anterior para não descobrir que
     # faltava login só no meio do anexo.
-    from preparar_navegador import preparar_navegador
+    from .preparar_navegador import preparar_navegador
     from main import perguntar_processo, perguntar_tipo_ob
 
     playwright, browser, context, _aba_sigef, _aba_sei = preparar_navegador()

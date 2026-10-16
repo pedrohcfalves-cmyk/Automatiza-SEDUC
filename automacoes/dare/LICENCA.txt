@@ -1,0 +1,160 @@
+================================================================================
+ LICENÇA DE USO - DARE AUTOMAÇÃO
+ Software proprietário - Todos os direitos reservados
+================================================================================
+
+Copyright (c) 2026 [NOME COMPLETO DO TITULAR]. Todos os direitos reservados.
+
+Leia com atenção. Ao instalar, copiar ou usar o Programa, você declara que leu
+e concorda com os termos abaixo. Se não concorda, não use o Programa.
+
+
+1. DEFINIÇÕES
+
+1.1  "Programa": o software "DARE automação", com seu código-fonte, scripts
+     (.py, .bat), planilha modelo, documentação (README, guia de uso) e todas
+     as versões e atualizações.
+
+1.2  "Titular": [NOME COMPLETO DO TITULAR], autor do Programa e titular dos
+     direitos sobre ele.
+
+1.3  "Usuário Autorizado": a pessoa física que recebeu do Titular autorização
+     expressa para usar o Programa. A autorização é pessoal e pode ser dada por
+     escrito, inclusive por e-mail ou mensagem eletrônica.
+
+
+2. CONCESSÃO DA LICENÇA
+
+2.1  O Titular concede ao Usuário Autorizado uma licença limitada, pessoal,
+     não exclusiva, intransferível, não sublicenciável e revogável para
+     instalar e executar o Programa em computadores sob o seu controle,
+     exclusivamente para a finalidade a que ele se destina: gerar DARE avulso,
+     salvar o PDF e anexá-lo como documento externo em processo do SEI.
+
+2.2  Somente o Usuário Autorizado pode usar o Programa. Ter recebido uma cópia,
+     por qualquer meio e de qualquer pessoa (inclusive de outro Usuário
+     Autorizado), NÃO é autorização de uso.
+
+2.3  O Titular pode conceder, limitar, suspender ou revogar a autorização de
+     qualquer pessoa, a qualquer momento, sem necessidade de justificativa.
+
+
+3. O QUE É PERMITIDO
+
+O Usuário Autorizado pode: (a) instalar e executar o Programa; (b) fazer uma
+cópia de segurança para o seu próprio uso; (c) usar as suas próprias planilhas
+e dados; (d) imprimir o guia de uso para consulta pessoal.
+
+
+4. O QUE NÃO É PERMITIDO (sem autorização escrita do Titular)
+
+É proibido:
+(a) copiar, redistribuir, publicar ou disponibilizar o Programa a terceiros, por
+    qualquer meio, inclusive repositórios públicos, grupos de mensagens, nuvens
+    compartilhadas, pen drives e e-mail;
+(b) vender, alugar, emprestar, sublicenciar ou explorar comercialmente o
+    Programa;
+(c) modificar, adaptar, traduzir ou criar obras derivadas do Programa, ou
+    reaproveitar partes dele em outro projeto;
+(d) remover ou alterar avisos de direitos autorais ou esta licença;
+(e) fazer engenharia reversa, salvo nas hipóteses em que a lei expressamente
+    permite;
+(f) permitir que outra pessoa, sem autorização do Titular, use o Programa em
+    seu computador, em sua conta ou com suas credenciais;
+(g) usar o Programa para fins ilícitos, para burlar controles de segurança de
+    qualquer sistema ou para sobrecarregar sistemas de terceiros.
+
+Sugestões e correções enviadas ao Titular podem ser incorporadas ao Programa
+sem qualquer pagamento ao autor da sugestão.
+
+
+5. PROPRIEDADE
+
+O Programa é licenciado, não vendido. Todos os direitos sobre ele pertencem ao
+Titular, nos termos da Lei nº 9.609/1998 (programas de computador) e da Lei
+nº 9.610/1998 (direitos autorais). Nenhum direito é concedido além dos
+expressamente previstos nesta licença.
+
+
+6. DADOS PESSOAIS (LGPD)
+
+6.1  O Programa funciona no computador do Usuário Autorizado e guarda ali, nas
+     pastas "dados", "logs", "modelos" e "DARE_PDFs", informações como CPF,
+     CNPJ, nomes e valores. O Programa não foi concebido para enviar esses
+     dados ao Titular, que não tem acesso a eles pelo Programa.
+
+6.2  O Usuário Autorizado (ou o órgão em que atua) é responsável pelo tratamento
+     desses dados, nos termos da Lei nº 13.709/2018 (LGPD). Deve protegê-los,
+     não compartilhá-los sem necessidade e apagá-los quando não forem mais
+     necessários.
+
+
+7. SISTEMAS DE TERCEIROS
+
+7.1  O Programa é independente e não tem vínculo, aprovação ou apoio da
+     Secretaria de Estado de Finanças, do Governo do Estado de Rondônia, do
+     SEI, da Microsoft, do Google ou de qualquer outra entidade. Os nomes e as
+     marcas pertencem aos seus respectivos titulares.
+
+7.2  O Usuário Autorizado é o único responsável por cumprir as normas e os
+     termos de uso dos sistemas que acessa e as regras do órgão em que atua.
+
+7.3  O Programa depende do funcionamento e do layout desses sistemas, que podem
+     mudar sem aviso e fazer o Programa deixar de funcionar ou funcionar de
+     forma diferente do esperado.
+
+
+8. COMPONENTES DE TERCEIROS
+
+O Programa usa componentes de terceiros, como Python, Playwright e pywin32, que
+têm licenças próprias, de seus respectivos titulares. Esta licença não se aplica
+a eles.
+
+
+9. AUSÊNCIA DE GARANTIA
+
+O Programa é fornecido "NO ESTADO EM QUE SE ENCONTRA", sem garantia de
+funcionamento ininterrupto, de ausência de erros ou de adequação a uma
+finalidade específica. O Usuário Autorizado deve CONFERIR os dados e os
+documentos gerados (DARE, valor, vencimento, anexo no SEI) antes de pagar ou
+protocolar qualquer coisa.
+
+
+10. LIMITAÇÃO DE RESPONSABILIDADE
+
+Na máxima extensão permitida pela lei, o Titular não responde por danos
+indiretos, lucros cessantes, multas, juros, perda de prazo, pagamento ou
+lançamento incorreto, perda de dados ou qualquer outro prejuízo decorrente do
+uso ou da impossibilidade de uso do Programa. Nada nesta licença exclui
+responsabilidade que a lei não permita excluir.
+
+
+11. VIGÊNCIA E ENCERRAMENTO
+
+11.1 A licença vigora enquanto durar a autorização do Titular.
+
+11.2 Ela termina automaticamente se o Usuário Autorizado violar qualquer
+     cláusula, ou quando o Titular revogar a autorização. Nesse caso, o Usuário
+     deve parar de usar o Programa e apagar todas as cópias que possuir.
+
+11.3 O encerramento não afasta as medidas legais cabíveis em caso de violação
+     (inclusive indenização por perdas e danos).
+
+
+12. DISPOSIÇÕES GERAIS
+
+12.1 Esta licença é regida pelas leis do Brasil. Fica eleito o foro da comarca
+     do domicílio do Titular, salvo foro obrigatório previsto em lei.
+
+12.2 Se alguma cláusula for considerada inválida, as demais continuam valendo.
+
+12.3 O Titular pode atualizar esta licença. Vale a versão que acompanha a cópia
+     do Programa em uso.
+
+12.4 Para pedir autorização, permissão especial ou tirar dúvidas, fale com o
+     Titular: [CONTATO DO TITULAR - e-mail ou telefone].
+
+
+================================================================================
+ [NOME COMPLETO DO TITULAR] - 2026
+================================================================================

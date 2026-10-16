@@ -2,9 +2,9 @@
 Testes offline da divisão em partes do etapa_sei2.py (limite de 2 MB do
 SEI) e da largura da OB. Não abre navegador, não fala com SIGEF nem SEI.
 
-    python testes_divisao.py
+    python testes/testes_divisao.py
 
-Roda na pasta do programa. O etapa_listar_baixar de verdade NÃO é
+Roda de qualquer pasta. O etapa_listar_baixar de verdade NÃO é
 carregado: um substituto mínimo entra no lugar (só o que o etapa_sei2
 importa dele), e a pasta de dados é uma pasta temporária.
 """
@@ -18,12 +18,14 @@ import types
 import unittest
 
 PASTA_AQUI = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, PASTA_AQUI)
+RAIZ = os.path.dirname(PASTA_AQUI)
+PASTA_SIGEF_SEI = os.path.join(RAIZ, "automacoes", "sigef_sei")
+sys.path.insert(0, RAIZ)
 
 # ---- substitutos: etapa_listar_baixar (sempre) e playwright (se faltar) ----
 _PASTA_DADOS = tempfile.mkdtemp(prefix="testes_sei2_")
 
-_listar_baixar = types.ModuleType("etapa_listar_baixar")
+_listar_baixar = types.ModuleType("automacoes.sigef_sei.etapa_listar_baixar")
 _listar_baixar.PASTA_BASE = _PASTA_DADOS
 _listar_baixar.URL_SEI = "https://sei.exemplo/"
 _listar_baixar.abrir_processo_sei = lambda *a, **k: None
@@ -31,7 +33,7 @@ _listar_baixar.aviso_conferencia_final = lambda *a, **k: None
 _listar_baixar.carregar_sessao = lambda: {}
 _listar_baixar.nome_pasta_valido = lambda texto: "".join(c if c.isalnum() else "_" for c in texto)
 _listar_baixar.obter_ou_criar_aba = lambda *a, **k: None
-sys.modules["etapa_listar_baixar"] = _listar_baixar
+sys.modules["automacoes.sigef_sei.etapa_listar_baixar"] = _listar_baixar
 
 try:
     import playwright.sync_api  # noqa: F401
@@ -49,7 +51,7 @@ except ImportError:
     sys.modules["playwright"] = types.ModuleType("playwright")
     sys.modules["playwright.sync_api"] = _sync_api
 
-import etapa_sei2 as sei  # noqa: E402
+from automacoes.sigef_sei import etapa_sei2 as sei  # noqa: E402
 
 # Tamanho de base64 + folga de uma página no teto de 250.000 bytes.
 PAGINA_CHEIA = 4 * -(-250_000 // 3) + sei.FOLGA_HTML_POR_IMAGEM_BYTES
@@ -508,7 +510,7 @@ class TestaNomesUsadosPorFora(unittest.TestCase):
             self.assertTrue(hasattr(sei, nome), nome)
 
     def test_assinaturas(self):
-        with open(os.path.join(PASTA_AQUI, "etapa_sei2.py"), encoding="utf-8") as arquivo:
+        with open(os.path.join(PASTA_SIGEF_SEI, "etapa_sei2.py"), encoding="utf-8") as arquivo:
             arvore = ast.parse(arquivo.read())
         funcoes = {no.name: no for no in arvore.body if isinstance(no, ast.FunctionDef)}
 

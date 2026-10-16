@@ -3,7 +3,7 @@ Ponto de entrada da automação SIGEF -> SEI.
 
     python main.py          (ou dois cliques em INICIAR.bat)
 
-Orquestra as três etapas, nesta ordem:
+Orquestra as três etapas (em automacoes/sigef_sei/), nesta ordem:
 
     preparar_navegador.py   abre o Chrome da automação, abre SIGEF e SEI
                             e espera o usuário confirmar que entrou
@@ -24,8 +24,8 @@ import os
 import re
 import sys
 
-from preparar_navegador import preparar_navegador
-from etapa_listar_baixar import (
+from automacoes.sigef_sei.preparar_navegador import preparar_navegador
+from automacoes.sigef_sei.etapa_listar_baixar import (
     PASTA_BASE,
     baixar_documentos,
     carregar_sessao,
@@ -45,7 +45,8 @@ except Exception:
 VERSAO = "3.7"
 
 # Terminado o download, anexa no SEI na mesma rodada. Desligue para
-# parar depois do download e anexar por fora com `python etapa_sei2.py`.
+# parar depois do download e anexar por fora com
+# `python -m automacoes.sigef_sei.etapa_sei2`.
 ANEXAR_NO_SEI = True
 
 LARGURA = 66
@@ -243,7 +244,7 @@ def perguntar_tipo_ob(sessao: dict) -> str:
     perguntado/gravado aqui bate exatamente com o texto que
     _incluir_documento() procura na tela do SEI.
     """
-    from etapa_sei2 import TEXTO_LINK_OB_NORMAL, TEXTO_LINK_OB_REGULARIZACAO
+    from automacoes.sigef_sei.etapa_sei2 import TEXTO_LINK_OB_NORMAL, TEXTO_LINK_OB_REGULARIZACAO
 
     opcoes = {"1": TEXTO_LINK_OB_REGULARIZACAO, "2": TEXTO_LINK_OB_NORMAL}
 
@@ -381,14 +382,14 @@ def processar_ob(context, aba_sigef, processo: str, ob: str, tipo_ob: str) -> No
     # faltando. O que já baixou fica na sessão.
     if ANEXAR_NO_SEI:
         print(f"\n{'=' * 50}\n➡️  Iniciando a Etapa SEI (2)...\n{'=' * 50}")
-        from etapa_sei2 import executar_sei2
+        from automacoes.sigef_sei.etapa_sei2 import executar_sei2
 
         executar_sei2(context, processo, dados=dados, tipo_ob=tipo_ob)
         print("\n✅ SIGEF baixado e documentos anexados no SEI.")
     else:
         print(
             "\nANEXAR_NO_SEI está desligado -- rode "
-            "`python etapa_sei2.py` quando quiser anexar."
+            "`python -m automacoes.sigef_sei.etapa_sei2` quando quiser anexar."
         )
 
 
@@ -427,9 +428,9 @@ def rodar_lote(context, aba_sigef, caminho: str) -> None:
     pede UMA confirmação e processa tudo sem parar. A conferência é uma
     só, no fim, com a lista do que foi feito.
     """
-    import lote
-    from etapa_sei2 import TEXTO_LINK_OB_REGULARIZACAO
-    from preparar_navegador import aviso_conferencia_final
+    from automacoes.sigef_sei import lote
+    from automacoes.sigef_sei.etapa_sei2 import TEXTO_LINK_OB_REGULARIZACAO
+    from automacoes.sigef_sei.preparar_navegador import aviso_conferencia_final
 
     tipo_padrao = carregar_sessao().get("tipo_ob") or TEXTO_LINK_OB_REGULARIZACAO
     itens = lote.ler_arquivo(caminho, tipo_padrao)

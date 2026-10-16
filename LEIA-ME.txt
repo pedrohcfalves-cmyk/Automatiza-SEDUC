@@ -208,6 +208,39 @@
   conferencia.
 
 ------------------------------------------------------------------
+  MODULO DARE (na janela da Central)
+------------------------------------------------------------------
+
+  Gera o DARE avulso no site da SEFIN, salva o PDF e anexa no
+  processo do SEI. Diferente do SIGEF -> SEI, este modulo GERA um
+  documento: o DARE. Um lancamento = um DARE.
+
+  1) Abra a janela da Central e clique em DARE, na barra da
+     esquerda. Aparecem as paginas: Inicio, Lancamentos, Execucao,
+     Arquivos PDF, Desempenho e Configuracoes.
+
+  2) Em Lancamentos, preencha processo, CPF, CNPJ, referencia,
+     vencimento e valor e clique em "Adicionar a lista" (ou
+     ENTER). Para muitos de uma vez: "Importar planilha" (uma
+     linha da planilha = um DARE).
+
+  3) Clique em "Iniciar processamento". Na primeira vez, o
+     programa pede o login: entre no DARE e no SEI na janela do
+     Chrome da automacao (a MESMA do SIGEF e do BB) e clique em
+     "Ja entrei nos dois sistemas".
+
+  4) Acompanhe em Execucao. Os que derem erro continuam na lista
+     para tentar de novo. "Parar apos o lancamento atual" termina
+     o que esta em andamento e para.
+
+  Enquanto o SIGEF -> SEI ou o BB estiverem rodando, o DARE nao
+  comeca (e o contrario tambem): todos usam o mesmo Chrome.
+
+  Os PDFs, o historico e os pendentes ficam em
+  Documentos\DARE Automacao -- a mesma pasta do aplicativo DARE
+  antigo. Quem ja usava o DARE encontra tudo la.
+
+------------------------------------------------------------------
   SE DER ALGUM PROBLEMA
 ------------------------------------------------------------------
 
@@ -270,16 +303,39 @@
                               COMPILAR.md, com o passo a passo
                               pra gerar o executavel de novo
     requirements.txt ........ bibliotecas necessarias
-    main.py ................. PONTO DE ENTRADA. Menus, perguntas e
-                              a ordem das etapas
-    preparar_navegador.py ... passo 0: abre o Chrome em modo de
-                              depuracao, abre SIGEF e SEI, avisa e
-                              espera o usuario confirmar o login
-    etapa_listar_baixar.py .. baixa os documentos do SIGEF
-                              (funcao baixar_documentos)
-    etapa_sei2.py ........... anexa os documentos no SEI
-                              (funcao executar_sei2)
+    main.py ................. PONTO DE ENTRADA da tela preta. Menus,
+                              perguntas e a ordem das etapas
+    app_janela.py ........... PONTO DE ENTRADA da janela (as tres
+                              automacoes: SIGEF-SEI, DARE e BB)
+
+    automacoes\ ............. uma pasta para cada automacao:
+
+      sigef_sei\ ............ SIGEF -> SEI
+        preparar_navegador.py  passo 0: abre o Chrome em modo de
+                               depuracao, abre SIGEF e SEI, avisa e
+                               espera o usuario confirmar o login
+        etapa_listar_baixar.py baixa os documentos do SIGEF
+                               (funcao baixar_documentos)
+        etapa_sei2.py ........ anexa os documentos no SEI
+                               (funcao executar_sei2)
+        lote.py .............. varias OBs de uma vez (planilha)
+        metricas.py .......... tempo de cada OB (metricas.csv)
+        relatorio_gerencial.py relatorio de tempo economizado
+
+      dare\ ................. DARE avulso -> PDF -> SEI (motor.py
+                               faz a rodada; terminal.py roda sem
+                               a janela)
+      bb\automacoes_bb.py .... cargas de cartao no portal do BB
+
+    janela\ ................. a tela da janela (interface\), a
+                              ligacao do BB e do DARE com ela
+                              (modulos_janela.py, modulo_dare.py) e a
+                              licenca (licenca.py)
+    LICENCA.txt ............. termo de uso mostrado na instalacao
+    testes\ ................. testes que rodam sem navegador
+
     sessao_atual.json ....... ultimo processo/OB e o que foi baixado
+                              (fica em Documentos\Automacao SIGEF-SEI)
 
   INSTALACAO (uma vez so, num prompt dentro desta pasta)
 
@@ -291,17 +347,24 @@
     Nao e preciso "playwright install": a automacao se conecta ao
     Chrome ja instalado na maquina, e nao a um navegador proprio.
 
-  RODAR
+  RODAR (sempre de dentro desta pasta)
 
       python main.py          (ou duplo clique no
                                AUTOMACAO SIGEF-SEI)
+      python app_janela.py    a janela, com as tres automacoes
 
   RODAR SO UMA PARTE
 
-      python preparar_navegador.py   testa o navegador e o login,
-                                     sem baixar nada
-      python etapa_sei2.py           anexa um processo ja baixado,
-                                     sem repetir o download
+      python -m automacoes.sigef_sei.preparar_navegador
+          testa o navegador e o login, sem baixar nada
+
+      python -m automacoes.sigef_sei.etapa_sei2
+          anexa um processo ja baixado, sem repetir o download
+
+  TESTES
+
+      python testes\testes_divisao.py
+      python -m unittest discover -s testes\dare -t .
 
   VERSAO
 

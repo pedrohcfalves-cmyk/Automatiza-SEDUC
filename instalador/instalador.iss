@@ -40,6 +40,8 @@ SolidCompression=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 CloseApplications=yes
+; Termo de uso: o instalador mostra e só segue com "Eu aceito".
+LicenseFile=..\LICENCA.txt
 
 [Languages]
 Name: "ptbr"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
@@ -50,6 +52,7 @@ Name: "atalho"; Description: "Criar um atalho na Área de Trabalho"; GroupDescri
 [Files]
 Source: "..\dist\{#Pasta}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\LEIA-ME.txt"; DestDir: "{app}"; Flags: ignoreversion isreadme
+Source: "..\LICENCA.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#Nome}"; Filename: "{app}\{#Executavel}"

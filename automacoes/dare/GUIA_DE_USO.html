@@ -1,0 +1,560 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DARE automação - Guia de uso passo a passo</title>
+<style>
+  :root {
+    --fundo: #ffffff; --texto: #1c2430; --suave: #4a5568; --linha: #d5dbe3;
+    --azul: #0b5cad; --azul-fundo: #e8f1fb;
+    --amarelo: #8a5a00; --amarelo-fundo: #fff5d6;
+    --vermelho: #9b1c1c; --vermelho-fundo: #fde8e8;
+    --verde: #176b3a; --verde-fundo: #e5f6ec;
+  }
+  * { box-sizing: border-box; }
+  html { font-size: 20px; }
+  body { margin: 0; background: var(--fundo); color: var(--texto);
+         font-family: "Segoe UI", Arial, sans-serif; line-height: 1.65; }
+  main { max-width: 860px; margin: 0 auto; padding: 24px 20px 80px; }
+  h1 { font-size: 2rem; line-height: 1.2; margin: 0.2em 0 0.3em; }
+  h2 { font-size: 1.5rem; margin: 2.2em 0 0.6em; padding-top: 0.6em; border-top: 3px solid var(--azul); color: var(--azul); }
+  h3 { font-size: 1.2rem; margin: 1.6em 0 0.4em; }
+  p, li { font-size: 1rem; }
+  ol, ul { padding-left: 1.4em; }
+  li { margin: 0.5em 0; }
+  .sub { color: var(--suave); font-size: 1.1rem; margin-top: 0; }
+  .caixa { border-left: 8px solid; border-radius: 6px; padding: 12px 16px; margin: 1.2em 0; page-break-inside: avoid; }
+  .caixa strong.titulo { display: block; font-size: 1.05rem; margin-bottom: 4px; }
+  .dica { background: var(--azul-fundo); border-color: var(--azul); }
+  .atencao { background: var(--amarelo-fundo); border-color: #d99a00; }
+  .perigo { background: var(--vermelho-fundo); border-color: var(--vermelho); }
+  .ok { background: var(--verde-fundo); border-color: var(--verde); }
+  .passos { list-style: none; counter-reset: passo; padding: 0; }
+  .passos > li { counter-increment: passo; position: relative; padding: 10px 12px 10px 64px; margin: 12px 0;
+                 border: 2px solid var(--linha); border-radius: 10px; page-break-inside: avoid; }
+  .passos > li::before { content: counter(passo); position: absolute; left: 12px; top: 10px; width: 40px; height: 40px;
+                 border-radius: 50%; background: var(--azul); color: #fff; font-weight: 700; font-size: 1.2rem;
+                 display: flex; align-items: center; justify-content: center; }
+  kbd { font-family: Consolas, monospace; font-size: 0.95em; background: #f1f3f6; border: 2px solid #9aa5b4;
+        border-bottom-width: 4px; border-radius: 6px; padding: 0 8px; white-space: nowrap; }
+  code { font-family: Consolas, monospace; background: #f1f3f6; padding: 1px 6px; border-radius: 4px; }
+  pre.tela { background: #14181f; color: #e8edf3; font-family: Consolas, "Courier New", monospace; font-size: 0.78rem;
+             line-height: 1.45; padding: 14px 16px; border-radius: 8px; overflow-x: auto; page-break-inside: avoid; }
+  pre.tela b { color: #7fd1ff; } pre.tela i { color: #8d99a8; font-style: normal; } pre.tela u { color: #ffd166; text-decoration: none; }
+  table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.92rem; }
+  th, td { border: 2px solid var(--linha); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: #f1f4f8; }
+  tr { page-break-inside: avoid; }
+  .indice { background: #f7f9fc; border: 2px solid var(--linha); border-radius: 10px; padding: 8px 20px; }
+  .indice a { color: var(--azul); }
+  .rodape { margin-top: 3em; padding-top: 1em; border-top: 2px solid var(--linha); font-size: 0.8rem; color: var(--suave); }
+  .nao { color: var(--vermelho); font-weight: 700; } .sim { color: var(--verde); font-weight: 700; }
+  @media print {
+    html { font-size: 15px; } main { max-width: none; padding: 0; }
+    h2, h3 { break-after: avoid-page; page-break-after: avoid; break-inside: avoid; }
+    h2 + *, h3 + * { break-before: avoid-page; }
+    a { color: inherit; text-decoration: none; }
+  }
+</style>
+</head>
+<body>
+<main>
+
+<h1>DARE automação</h1>
+<p class="sub">Guia de uso passo a passo, para quem não é da área de informática</p>
+
+<div class="caixa dica">
+  <strong class="titulo">Para que serve este programa?</strong>
+  Ele faz sozinho um trabalho que você faria com muitos cliques: <b>(1)</b> preenche o DARE no site da Sefin,
+  <b>(2)</b> salva o PDF do DARE no computador e <b>(3)</b> anexa esse PDF no processo certo do SEI.
+  Você só informa os dados (digitando ou usando uma planilha) e acompanha.
+</div>
+
+<div class="caixa atencao">
+  <strong class="titulo">Calma, é mais simples do que parece</strong>
+  Você não precisa entender de computador. Basta seguir os passos <b>na ordem</b>. O programa vai fazendo perguntas
+  e, em quase todas, é só digitar a resposta e apertar a tecla <kbd>Enter</kbd>.
+  Se errar, quase tudo pode ser corrigido antes de começar.
+</div>
+
+<div class="indice">
+<p><b>O que você vai encontrar aqui</b></p>
+<ol>
+  <li><a href="#antes">Antes de começar</a></li>
+  <li><a href="#instalar">Instalação (uma única vez)</a></li>
+  <li><a href="#abrir">Como abrir o programa</a></li>
+  <li><a href="#modo">Escolher o modo: digitar ou planilha</a></li>
+  <li><a href="#lotes">Modo em lotes (digitando)</a></li>
+  <li><a href="#planilha">Modo planilha (usando o Excel)</a></li>
+  <li><a href="#conferir">Conferir antes de iniciar</a></li>
+  <li><a href="#login">Entrar nos sistemas (login)</a></li>
+  <li><a href="#rodando">Enquanto o programa trabalha</a></li>
+  <li><a href="#fim">Quando terminar</a></li>
+  <li><a href="#problemas">Se algo der errado</a></li>
+  <li><a href="#seguranca">Cuidados com os dados</a></li>
+  <li><a href="#glossario">Palavras que aparecem no programa</a></li>
+</ol>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="antes">1. Antes de começar</h2>
+
+<p>Para usar o programa você precisa de:</p>
+<ul>
+  <li>Um computador com <b>Windows</b>.</li>
+  <li>O navegador <b>Google Chrome</b> instalado.</li>
+  <li><b>Internet</b> funcionando.</li>
+  <li>Seu <b>usuário e senha</b> do SEI e do DARE (os mesmos que você já usa).</li>
+  <li>Os <b>dados de cada DARE</b>: número do processo, CNPJ, CPF do servidor, CNPJ do recolhedor, mês de referência,
+      data de vencimento e valor.</li>
+  <li><i>Só para o modo planilha:</i> o programa <b>Microsoft Excel</b>.</li>
+</ul>
+
+<div class="caixa atencao">
+  <strong class="titulo">Autorização</strong>
+  Este programa só pode ser usado por <b>pessoas autorizadas pelo autor</b>. Leia o arquivo
+  <code>LICENCA.txt</code> (abre no Bloco de Notas). Não copie nem passe o programa para outras pessoas.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="instalar">2. Instalação (uma única vez)</h2>
+
+<div class="caixa dica">
+  <strong class="titulo">Peça ajuda se preferir</strong>
+  Este passo é feito <b>só uma vez</b> em cada computador. Se você não se sentir à vontade, peça para a pessoa que
+  lhe entregou o programa fazer esta parte. Depois dela, o uso do dia a dia é bem simples.
+</div>
+
+<ol class="passos">
+  <li><b>Coloque a pasta do programa em um lugar fácil.</b><br>
+      Copie a pasta <code>DARE e Anexar</code> para <b>Documentos</b> (evite deixar em "Downloads").
+      Não mude o nome dos arquivos que estão dentro dela.</li>
+  <li><b>Instale o Python</b> (um programa de apoio, gratuito).<br>
+      Abra o site <code>python.org/downloads</code>, clique no botão amarelo <b>Download Python</b> e abra o arquivo baixado.<br>
+      <span class="nao">MUITO IMPORTANTE:</span> na primeira tela, marque a caixinha
+      <b>"Add python.exe to PATH"</b> (ou "Add Python to PATH"). Depois clique em <b>Install Now</b> e espere terminar.</li>
+  <li><b>Instale os componentes do programa.</b><br>
+      Na pasta do programa, dê <b>dois cliques</b> no arquivo <code>instalar.bat</code>.
+      Abrirá uma janela preta com mensagens. Espere até aparecer
+      <b>"PRONTO! Instalação concluída."</b> e aperte qualquer tecla para fechar.</li>
+</ol>
+
+<div class="caixa atencao">
+  <strong class="titulo">O Windows mostrou "O Windows protegeu seu computador"?</strong>
+  Isso é normal em arquivos novos. Se o programa veio de quem você confia, clique em <b>Mais informações</b> e depois em
+  <b>Executar assim mesmo</b>.
+</div>
+
+<div class="caixa dica">
+  <strong class="titulo">Deixe um atalho na Área de Trabalho</strong>
+  Clique com o <b>botão direito</b> em <code>executar.bat</code> &rarr; <b>Enviar para</b> &rarr;
+  <b>Área de trabalho (criar atalho)</b>. Assim você abre o programa direto da tela inicial.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="abrir">3. Como abrir o programa</h2>
+
+<ol class="passos">
+  <li><b>Dê dois cliques em <code>executar.bat</code></b> (ou no atalho da Área de Trabalho).</li>
+  <li><b>Vai aparecer uma janela preta com letras.</b> Ela é o "painel" do programa. <u>Não feche</u> essa janela
+      enquanto estiver usando.</li>
+  <li><b>O Chrome abre sozinho</b>, com duas abas: uma do <b>SEI</b> e outra do <b>DARE</b>.
+      Pode demorar alguns segundos. É um Chrome só do programa; o seu Chrome de sempre não é afetado.</li>
+  <li><b>Aperte <kbd>Enter</kbd></b> quando a janela pedir. Aparece o <b>menu principal</b>.</li>
+</ol>
+
+<p>O menu é assim:</p>
+<pre class="tela">╔════════════════════════════════════════════════════════════════╗
+║                         DARE AUTOMAÇÃO                         ║
+║          gerar DARE  →  salvar PDF  →  anexar no SEI           ║
+╚════════════════════════════════════════════════════════════════╝
+
+   <b>1</b>  Modo em lotes     (digitar os dados na tela)
+   <b>2</b>  Modo planilha     (ler os dados de uma planilha do Excel)
+   <b>3</b>  Abrir a pasta dos PDFs
+   <b>4</b>  Abrir a pasta de logs
+   <b>0</b>  Sair
+
+  › Escolha uma opção: <u>_</u></pre>
+
+<div class="caixa dica">
+  <strong class="titulo">Como "escolher uma opção"</strong>
+  Digite o <b>número</b> da opção e aperte <kbd>Enter</kbd>. Exemplo: digite <kbd>1</kbd> e <kbd>Enter</kbd>.
+  <br>Se você digitar algo errado, o programa avisa e pergunta de novo. Não tem problema.
+</div>
+
+<h3>Regras de ouro para digitar</h3>
+<ul>
+  <li><kbd>Enter</kbd> = "confirmar". Você aperta depois de cada resposta.</li>
+  <li>Quando aparecer algo como <code>[Enter = 100,00]</code>, significa que, <b>se você apertar só o Enter</b>, o programa usa esse valor.</li>
+  <li>Para <b>colar</b> um texto copiado (por exemplo, um número de processo), clique com o <b>botão direito</b> do mouse
+      dentro da janela preta. Em algumas versões do Windows, serve <kbd>Ctrl</kbd>+<kbd>V</kbd>.</li>
+  <li>Para <b>cancelar</b> o que está fazendo e voltar ao menu: segure <kbd>Ctrl</kbd> e aperte <kbd>C</kbd>.</li>
+  <li>Não precisa digitar pontos e traços de CPF e CNPJ. Pode digitar com ou sem eles.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="modo">4. Escolher o modo: digitar ou planilha</h2>
+
+<table>
+  <tr><th>Modo</th><th>Quando usar</th></tr>
+  <tr><td><b>1 &ndash; Modo em lotes</b></td>
+      <td>Você tem <b>poucos DAREs</b> (1 a 10) e prefere <b>digitar</b> os dados na tela.</td></tr>
+  <tr><td><b>2 &ndash; Modo planilha</b></td>
+      <td>Você tem <b>muitos DAREs</b> ou os dados já estão numa <b>planilha do Excel</b>.
+          O programa lê a planilha linha por linha, sem você digitar nada.</td></tr>
+</table>
+
+<p>Os dois modos fazem exatamente o mesmo trabalho depois. Só muda a forma de informar os dados.</p>
+
+<div class="caixa dica">
+  <strong class="titulo">O que é um "lote"?</strong>
+  Um lote é <b>um DARE completo</b> (um processo, um servidor, um valor). Se você vai fazer 5 DAREs, são 5 lotes.
+  O programa faz um lote de cada vez, do primeiro ao último, sem parar.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="lotes">5. Modo em lotes (digitando)</h2>
+
+<p>No menu, digite <kbd>1</kbd> e <kbd>Enter</kbd>. O programa pergunta os dados, <b>um de cada vez</b>:</p>
+
+<table>
+  <tr><th>O programa pergunta</th><th>O que você digita</th><th>Exemplo</th></tr>
+  <tr><td><b>Processo SEI</b></td><td>O número do processo que vai receber o DARE</td><td><code>0012.123456/2026-12</code></td></tr>
+  <tr><td><b>CNPJ (órgão)</b></td><td>O CNPJ do órgão (14 números)</td><td><code>11222333000181</code></td></tr>
+  <tr><td><b>CPF do servidor</b></td><td>O CPF do servidor (11 números)</td><td><code>52998224725</code></td></tr>
+  <tr><td><b>CNPJ do recolhedor</b></td><td>O CNPJ de quem recolhe (14 números)</td><td><code>11222333000181</code></td></tr>
+  <tr><td><b>Mês/ano de referência</b></td><td>O mês e o ano, <b>com 6 números</b>: mês (2) + ano (4)</td><td><code>102026</code> = outubro de 2026</td></tr>
+  <tr><td><b>Data de vencimento</b></td><td>Dia/mês/ano. <b>Só Enter</b> = 1 mês à frente, em dia útil</td><td><code>10/11/2026</code></td></tr>
+  <tr><td><b>Valor (R$)</b></td><td>O valor. <b>Só Enter</b> = 100,00</td><td><code>7273,07</code> ou <code>7.273,07</code></td></tr>
+</table>
+
+<p>A tela é parecida com esta:</p>
+<pre class="tela">┌─ Lote 1 ───────────────────────────────────────────────────────┐
+│ Preencha os dados deste lote. Enter aceita o valor entre       │
+│ colchetes.                                                     │
+└────────────────────────────────────────────────────────────────┘
+
+     Número do processo que receberá o DARE.
+  › Processo SEI: <u>0012.123456/2026-12</u>
+  › CNPJ (órgão): <u>11222333000181</u>
+  › CPF do servidor: <u>52998224725</u>
+  ...
+  › Valor (R$) <i>[Enter = 100,00]</i>: <u>7273,07</u>
+
+  › Adicionar outro lote? [S/n]: </pre>
+
+<div class="caixa ok">
+  <strong class="titulo">O programa confere para você</strong>
+  Se você digitar um CPF ou CNPJ inexistente, um mês inválido ou um valor estranho, ele mostra uma mensagem em vermelho
+  (<span class="nao">✖</span>) explicando o erro e <b>pergunta de novo</b>. Basta digitar certo.
+</div>
+
+<h3>Depois do primeiro lote</h3>
+<ul>
+  <li>O programa pergunta <b>"Adicionar outro lote?"</b>. Digite <kbd>s</kbd> (sim) ou só <kbd>Enter</kbd> para adicionar mais um;
+      digite <kbd>n</kbd> (não) quando acabar.</li>
+  <li>Nos lotes seguintes, vários campos já vêm <b>preenchidos com o lote anterior</b> (CNPJ, recolhedor, referência, vencimento e valor).
+      Se for igual, é só apertar <kbd>Enter</kbd>. Só o <b>processo</b> e o <b>CPF</b> você digita sempre.</li>
+</ul>
+
+<div class="caixa atencao">
+  <strong class="titulo">Cuidado com o valor</strong>
+  <code>7.243</code> o programa entende como <b>7.243,00</b> (sete mil duzentos e quarenta e três reais).
+  Se o valor é 7 reais e 243 milésimos, ou se tiver dúvida, digite sempre com vírgula e centavos: <code>7243,00</code>.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="planilha">6. Modo planilha (usando o Excel)</h2>
+
+<p>Aqui você <b>não digita os dados</b>: o programa lê de uma planilha do Excel. <b>Uma linha da planilha = um DARE.</b></p>
+
+<h3>6.1 Preparando a planilha</h3>
+<p>Você pode usar a <b>sua própria planilha</b> (qualquer formato) ou o <b>modelo</b> pronto do programa.
+Para criar o modelo: no modo planilha, digite <kbd>M</kbd> e <kbd>Enter</kbd>. O Excel abre com a planilha modelo.</p>
+
+<p>O modelo tem estas colunas (cada coluna é uma informação):</p>
+<table>
+  <tr><th>A</th><th>B</th><th>C</th><th>D</th><th>E</th><th>F</th><th>G</th></tr>
+  <tr><td>Processo SEI</td><td>CNPJ do órgão</td><td>CPF do servidor</td><td>CNPJ do recolhedor</td><td>Mês/Ano referência</td><td>Vencimento</td><td>Valor (R$)</td></tr>
+  <tr><td>0012.123456/<br>2026-12</td><td>11222333000181</td><td>52998224725</td><td>11222333000181</td><td>102026</td><td>10/11/2026</td><td>7273,07</td></tr>
+</table>
+
+<div class="caixa atencao">
+  <strong class="titulo">A linha 2 do modelo é só um exemplo!</strong>
+  Apague ou troque pelos seus dados <b>antes</b> de rodar o programa. Depois <b>salve</b> a planilha (clique no ícone do <b>disquete</b>, no alto do Excel) e deixe-a <b>aberta</b> no Excel.
+</div>
+
+<ul>
+  <li><b>Vencimento</b> e <b>Valor</b> podem ficar em branco: o programa usa "1 mês à frente, em dia útil" e "100,00".</li>
+  <li>Se o Excel mostrar um aviso amarelo <b>"Modo de Exibição Protegido"</b>, clique em <b>Habilitar edição</b>.
+      Sem isso o programa não enxerga a planilha.</li>
+  <li>O programa <b>nunca altera</b> a sua planilha. Ele só lê.</li>
+</ul>
+
+<h3>6.2 Passo a passo no programa</h3>
+<ol class="passos">
+  <li><b>No menu principal, digite <kbd>2</kbd> e <kbd>Enter</kbd>.</b></li>
+  <li><b>Escolha a planilha.</b><br>
+      O programa mostra a lista das planilhas <b>abertas no Excel</b>. Digite o <b>número</b> da sua e <kbd>Enter</kbd>.<br>
+      Não achou? Duas saídas: abra a planilha no Excel e digite <kbd>R</kbd> (atualizar a lista), ou digite
+      <kbd>C</kbd> e escreva o <b>caminho do arquivo</b> (dica: no Explorador, clique no arquivo com o botão direito
+      segurando <kbd>Shift</kbd> &rarr; "Copiar como caminho", e cole com o botão direito do mouse).</li>
+  <li><b>Escolha a aba.</b><br>
+      Aba é cada "folha" da planilha, lá embaixo no Excel (Plan1, Dados...). Digite o <b>número</b> ou o <b>nome</b>.
+      Se houver só uma, o programa já escolhe.</li>
+  <li><b>Confirme as colunas.</b><br>
+      O programa tenta descobrir sozinho qual coluna é o processo, o CPF, etc. Ele mostra o resultado e pergunta
+      <b>"Usar estas colunas? [S/n]"</b>.
+      <ul>
+        <li>Está certo? Aperte <kbd>Enter</kbd>.</li>
+        <li>Está errado? Digite <kbd>n</kbd>. Aí, para cada informação, digite a <b>letra da coluna</b> (por exemplo <kbd>C</kbd>)
+            ou o <b>nome do título</b> da coluna. Se não souber, peça ajuda.</li>
+      </ul>
+      Na próxima vez que usar a mesma planilha, o programa <b>lembra</b> das colunas.</li>
+  <li><b>Escolha de que linha até que linha.</b><br>
+      O programa mostra, por exemplo: <i>"Dados encontrados da linha 2 até a linha 40"</i>.
+      <ul>
+        <li><b>Linha inicial:</b> aperte <kbd>Enter</kbd> para começar do começo, ou digite o número da linha.</li>
+        <li><b>Linha final:</b> aperte <kbd>Enter</kbd> para ir <b>até o fim</b> da planilha, ou digite o número da linha.</li>
+      </ul>
+      Exemplo: para fazer só as linhas 10 a 15, digite <kbd>10</kbd> e depois <kbd>15</kbd>.
+      O número da linha é o que aparece na <b>lateral esquerda</b> do Excel.</li>
+  <li><b>Veja o resultado da leitura.</b><br>
+      O programa mostra quantas linhas estão certas. Linhas com problema (por exemplo, <i>CPF inválido</i>)
+      aparecem listadas com o <b>número da linha</b> e o motivo, e <b>ficam de fora</b>.
+      Ele pergunta se você quer continuar só com as linhas certas. Se quiser corrigir a planilha antes, responda <kbd>n</kbd>,
+      corrija no Excel, salve e comece de novo.</li>
+</ol>
+
+<div class="caixa dica">
+  <strong class="titulo">Linhas em branco e escondidas</strong>
+  Linhas totalmente vazias e linhas <b>escondidas por filtro</b> são puladas automaticamente.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="conferir">7. Conferir antes de iniciar</h2>
+
+<p>Nos <b>dois modos</b> aparece a tela <b>"Confira todos os dados"</b>, com a lista de tudo que será feito.
+<span class="sim">Olhe com calma.</span> Nada começa até você mandar.</p>
+
+<pre class="tela">┌─ Confira todos os dados ───────────────────────────────────────┐
+│ 2 lançamento(s): cada um gera o DARE, salva o PDF e anexa no   │
+│ SEI.                                                           │
+└────────────────────────────────────────────────────────────────┘
+
+  #   Processo             CPF            Ref.    Vencimento   Valor
+   1  0012.123456/2026-12  529.982.247-25 10/2026 10/11/2026 R$   7.273,07
+   2  0012.123456/2026-99  529.982.247-25 10/2026 10/11/2026 R$     100,00
+
+  <b>I</b> iniciar    <b>E n</b> editar lote n    <b>R n</b> remover lote n    <b>A</b> adicionar lote    <b>C</b> cancelar
+
+  › O que deseja fazer? <u>_</u></pre>
+
+<table>
+  <tr><th>Digite</th><th>O que acontece</th><th>Exemplo</th></tr>
+  <tr><td><kbd>E 2</kbd></td><td><b>Editar</b> (corrigir) o lote 2. Aperte Enter nos campos certos e digite só o que quer mudar.</td><td><code>E 2</code> + Enter</td></tr>
+  <tr><td><kbd>R 2</kbd></td><td><b>Remover</b> o lote 2 (o programa pede confirmação).</td><td><code>R 2</code> + Enter</td></tr>
+  <tr><td><kbd>A</kbd></td><td><b>Adicionar</b> mais um lote.</td><td><code>A</code> + Enter</td></tr>
+  <tr><td><kbd>C</kbd></td><td><b>Cancelar</b> tudo e voltar ao menu.</td><td><code>C</code> + Enter</td></tr>
+  <tr><td><kbd>I</kbd></td><td><b>Iniciar</b>: começa o trabalho de verdade.</td><td><code>I</code> + Enter</td></tr>
+</table>
+
+<div class="caixa atencao">
+  <strong class="titulo">Só o <kbd>I</kbd> inicia</strong>
+  Apertar só o Enter <b>não</b> inicia. Isso é de propósito, para evitar começar por engano.
+  Se aparecerem avisos em amarelo (<span style="color:#d99a00">⚠</span>), como "data de vencimento no passado" ou
+  "lotes repetidos", leia com atenção antes de iniciar.
+</div>
+
+<h3>Lista para conferir (olhe lote por lote)</h3>
+<ul>
+  <li>☐ O <b>número do processo</b> está certo? (um número errado anexa o DARE no processo errado)</li>
+  <li>☐ O <b>CPF</b> é do servidor correto?</li>
+  <li>☐ O <b>mês de referência</b> está certo? (<code>10/2026</code> = outubro de 2026)</li>
+  <li>☐ A <b>data de vencimento</b> é a que você quer?</li>
+  <li>☐ O <b>valor</b> está certo?</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="login">8. Entrar nos sistemas (login)</h2>
+
+<p>Ao iniciar, o programa pede que você entre com a sua conta no <b>SEI</b> e no <b>DARE</b>:</p>
+
+<pre class="tela">┌─ Antes de continuar ───────────────────────────────────────────┐
+│ 1. Na aba do DARE e na aba do SEI, entre com a sua conta.      │
+│ 2. Quando as duas estiverem logadas, volte aqui.               │
+└────────────────────────────────────────────────────────────────┘
+
+  Pressione Enter quando estiver logado nos dois sistemas...</pre>
+
+<ol class="passos">
+  <li><b>Olhe a janela do Chrome</b> que o programa abriu (se ela estiver escondida, clique no ícone do Chrome na barra do Windows).</li>
+  <li><b>Na aba do SEI</b>, digite seu usuário, senha e entre normalmente.</li>
+  <li><b>Na aba do DARE</b> (clique na aba para trocar), faça o mesmo, se pedir.</li>
+  <li><b>Volte para a janela preta</b> e aperte <kbd>Enter</kbd>.</li>
+</ol>
+
+<div class="caixa ok">
+  <strong class="titulo">Boa notícia</strong>
+  Nas próximas vezes, o Chrome do programa costuma lembrar do seu login. Se já estiver logado, é só apertar Enter.
+  Você só confirma o login <b>uma vez</b> por vez que abre o programa (não a cada lote).
+</div>
+
+<!-- ============================================================ -->
+<h2 id="rodando">9. Enquanto o programa trabalha</h2>
+
+<p>Agora o programa faz tudo sozinho: preenche o DARE, salva o PDF e anexa no SEI. Você vai ver o Chrome
+<b>trocando de aba e preenchendo campos sozinho</b>. Isso é o esperado.</p>
+
+<div class="caixa perigo">
+  <strong class="titulo">Enquanto estiver trabalhando, NÃO:</strong>
+  <ul>
+    <li class="nao">mexa no mouse nem no teclado dentro do Chrome do programa;</li>
+    <li class="nao">feche a janela preta nem o Chrome do programa;</li>
+    <li class="nao">clique em botões do DARE ou do SEI;</li>
+    <li class="nao">deixe o computador entrar em suspensão ou desligar (se for demorar, configure o Windows para não suspender).</li>
+  </ul>
+</div>
+
+<ul>
+  <li>Você pode fazer outras coisas <b>em outras janelas</b> (Word, e-mail), mas sem tapar o Chrome do programa
+      e sem mexer nele.</li>
+  <li>Cada DARE leva <b>alguns instantes</b>. Com muitos lotes, o total pode demorar. Tenha paciência.</li>
+  <li>Aparecem mensagens na janela preta como <span class="sim">✔ Lote 1/5 concluído.</span>
+      Quando um lote falha: <span class="nao">✖ Lote 3/5 falhou.</span> <b>O programa não para:</b> ele segue para o próximo lote.</li>
+  <li>Se o Chrome do programa for fechado sem querer, o programa tenta abri-lo de novo.</li>
+</ul>
+
+<div class="caixa dica">
+  <strong class="titulo">Precisa parar?</strong>
+  Na janela preta, segure <kbd>Ctrl</kbd> e aperte <kbd>C</kbd>. O programa para com segurança e guarda o que ficou sem fazer,
+  para você continuar depois.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="fim">10. Quando terminar</h2>
+
+<p>No final o programa mostra um <b>resumo</b>:</p>
+<pre class="tela">┌─ Resumo dos lotes ─────────────────────────────────────────────┐
+│ ✔ Lote 1: 0012.123456/2026-12 · NOME DO SERVIDOR               │
+│ ✖ Lote 2: 0012.123456/2026-99 · 529.982.247-25                 │
+│    ↳ TimeoutError: ...                                         │
+│                                                                │
+│ Concluídos: 1 · Com erro: 1 · Total: 2                         │
+│ PDFs em: C:\Users\...\DARE e Anexar\DARE_PDFs                  │
+└────────────────────────────────────────────────────────────────┘</pre>
+
+<ul>
+  <li><span class="sim">✔ (verde)</span> = deu certo: o DARE foi gerado, salvo e anexado no SEI.</li>
+  <li><span class="nao">✖ (vermelho)</span> = deu erro nesse lote.</li>
+</ul>
+
+<h3>Se algum lote deu erro</h3>
+<p>O programa pergunta: <i>"Tentar de novo os lotes com erro? [s/N]"</i>.</p>
+
+<div class="caixa perigo">
+  <strong class="titulo">ATENÇÃO antes de tentar de novo</strong>
+  Às vezes o erro acontece <b>depois</b> que o DARE já foi gerado (por exemplo, na hora de anexar no SEI).
+  Nesse caso o resumo mostra: <i>"O DARE foi gerado, mas não anexado"</i> e o caminho do PDF.
+  <b>Não refaça esse lote sem conferir</b>, senão você pode gerar um DARE repetido.
+  Confira no SEI se o documento foi anexado. Se não foi, anexe o PDF que está salvo na pasta.
+</div>
+
+<h3>Onde estão os PDFs?</h3>
+<ol class="passos">
+  <li>No menu principal, digite <kbd>3</kbd> e <kbd>Enter</kbd>.</li>
+  <li>A pasta <b>DARE_PDFs</b> abre sozinha, com todos os PDFs. Cada nome tem o servidor, o CPF, o mês e o vencimento.</li>
+</ol>
+
+<h3>Para sair</h3>
+<p>No menu principal, digite <kbd>0</kbd> e <kbd>Enter</kbd>. Depois pode fechar a janela do Chrome do programa.</p>
+
+<!-- ============================================================ -->
+<h2 id="problemas">11. Se algo der errado</h2>
+
+<p><b>Primeiro, respire.</b> O programa não apaga nada seu. Veja a tabela:</p>
+
+<table>
+  <tr><th>O que aconteceu</th><th>O que fazer</th></tr>
+  <tr><td>Ao clicar em <code>executar.bat</code>, a janela abre e fecha na hora, ou diz que não acha o Python.</td>
+      <td>A instalação não foi feita. Dê dois cliques em <code>instalar.bat</code> e siga as mensagens.</td></tr>
+  <tr><td>"Falta instalar uma dependência".</td>
+      <td>Dê dois cliques em <code>instalar.bat</code> (com internet).</td></tr>
+  <tr><td>O Chrome não abriu.</td>
+      <td>Feche todas as janelas do Chrome, feche o programa e abra de novo. Se persistir, dê dois cliques em
+          <code>iniciar_chrome_debug.bat</code> e depois use o programa.</td></tr>
+  <tr><td>O programa parou e fica "esperando" na aba errada.</td>
+      <td>Não mexa. Se passar de alguns minutos, aperte <kbd>Ctrl</kbd>+<kbd>C</kbd> na janela preta e comece de novo.
+          Os lotes pendentes serão oferecidos para retomar.</td></tr>
+  <tr><td>Apareceu <i>"Há N lançamento(s) pendente(s)... Retomar?"</i></td>
+      <td>É o programa lembrando de lotes que não terminaram. <kbd>Enter</kbd> (Sim) continua de onde parou;
+          <kbd>n</kbd> descarta e começa do zero.</td></tr>
+  <tr><td>O CPF/CNPJ foi recusado ("inválido").</td>
+      <td>Confira os números, um por um. O programa confere os dígitos finais para evitar erro de digitação.</td></tr>
+  <tr><td>Minha planilha não aparece na lista (modo planilha).</td>
+      <td>Ela precisa estar <b>aberta no Excel</b> e com a "Edição habilitada". Digite <kbd>R</kbd> para atualizar a lista,
+          ou <kbd>C</kbd> para digitar o caminho do arquivo.</td></tr>
+  <tr><td>"A biblioteca pywin32 não está instalada".</td>
+      <td>Dê dois cliques em <code>instalar.bat</code>. O modo planilha precisa do Microsoft Excel.</td></tr>
+  <tr><td>Uma linha da planilha foi ignorada.</td>
+      <td>A janela mostra o número da linha e o motivo (por exemplo, "CPF inválido"). Corrija na planilha e rode de novo
+          só essa linha (escolha a mesma linha como inicial e final).</td></tr>
+  <tr><td>O SEI ou o DARE mudou e o programa "não acha" um botão.</td>
+      <td>Os sites podem mudar sem aviso. Avise quem lhe entregou o programa e mande o arquivo de registro (veja abaixo).</td></tr>
+</table>
+
+<h3>Como pedir ajuda</h3>
+<ol class="passos">
+  <li>No menu, digite <kbd>4</kbd> e <kbd>Enter</kbd>: abre a pasta de registros (logs).</li>
+  <li>Envie para quem lhe entregou o programa o arquivo <code>dare_automacao.log</code>
+      e, se houver, as fotos da pasta <code>erros</code>.
+      Conte <b>o que você estava fazendo</b> e <b>o que apareceu na tela</b> (se puder, tire uma foto da tela).</li>
+</ol>
+<p><b>Contato para ajuda:</b> [NOME / TELEFONE / E-MAIL DE QUEM DÁ O SUPORTE]</p>
+
+<!-- ============================================================ -->
+<h2 id="seguranca">12. Cuidados com os dados</h2>
+
+<p>O programa lida com <b>CPF, CNPJ e nomes de servidores</b>. São dados protegidos pela lei (LGPD).</p>
+<ul>
+  <li>Não envie a pasta do programa por e-mail ou WhatsApp. Ela contém seu histórico com dados reais.</li>
+  <li>Não deixe o computador desbloqueado com o programa aberto. Bloqueie a tela (<kbd>Windows</kbd>+<kbd>L</kbd>) ao sair.</li>
+  <li>Guarde planilhas com dados em pastas <b>só suas</b>. Apague as que não precisa mais.</li>
+  <li>O programa guarda no seu computador, nas pastas <code>dados</code>, <code>logs</code> e <code>DARE_PDFs</code>,
+      o histórico do que foi feito. Apague essas informações quando não forem mais necessárias.</li>
+  <li><b>Nunca</b> diga sua senha a ninguém. O programa não pede nem guarda sua senha: você a digita nos sites, como sempre.</li>
+  <li>O programa é de uso restrito a pessoas autorizadas. Veja <code>LICENCA.txt</code>.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="glossario">13. Palavras que aparecem no programa</h2>
+
+<table>
+  <tr><th>Palavra</th><th>O que significa</th></tr>
+  <tr><td><b>DARE</b></td><td>Documento de Arrecadação de Receitas Estaduais: o "boleto" que o programa gera.</td></tr>
+  <tr><td><b>SEI</b></td><td>Sistema Eletrônico de Informações, onde ficam os processos. O PDF do DARE é anexado lá.</td></tr>
+  <tr><td><b>Processo</b></td><td>O número do processo no SEI que vai receber o DARE (ex.: 0012.123456/2026-12).</td></tr>
+  <tr><td><b>Lote</b></td><td>Um DARE completo (um conjunto de dados). Vários lotes = vários DAREs em sequência.</td></tr>
+  <tr><td><b>CPF / CNPJ</b></td><td>Os documentos da pessoa (11 números) e da empresa/órgão (14 números).</td></tr>
+  <tr><td><b>Recolhedor</b></td><td>Quem faz o recolhimento (o pagamento) do DARE.</td></tr>
+  <tr><td><b>Referência</b></td><td>O mês e o ano a que o DARE se refere (ex.: 102026 = outubro de 2026).</td></tr>
+  <tr><td><b>Vencimento</b></td><td>A data limite para pagar o DARE.</td></tr>
+  <tr><td><b>Janela preta</b></td><td>O "painel" do programa, onde ele faz as perguntas e mostra as mensagens.</td></tr>
+  <tr><td><b>Enter</b></td><td>A tecla grande do teclado, geralmente com uma seta dobrada. Serve para confirmar.</td></tr>
+  <tr><td><b>Aba</b></td><td>No Chrome: cada "página" aberta no alto da janela. No Excel: cada "folha" da planilha, embaixo.</td></tr>
+  <tr><td><b>Planilha</b></td><td>O arquivo do Excel com os dados, em linhas e colunas.</td></tr>
+  <tr><td><b>Log / registro</b></td><td>Um "diário" que o programa escreve do que fez. Serve para descobrir problemas.</td></tr>
+  <tr><td><b>Pendente</b></td><td>Lote que ficou sem fazer (por erro ou porque você parou).</td></tr>
+</table>
+
+<div class="rodape">
+  <p><b>DARE automação</b> &mdash; Copyright &copy; 2026 [NOME COMPLETO DO TITULAR]. Todos os direitos reservados.<br>
+  Uso restrito a pessoas autorizadas pelo titular, conforme <code>LICENCA.txt</code>.
+  Programa independente, sem vínculo com a Sefin-RO, o SEI ou o Governo do Estado de Rondônia.</p>
+</div>
+
+</main>
+</body>
+</html>

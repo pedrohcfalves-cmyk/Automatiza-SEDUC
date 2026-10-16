@@ -34,8 +34,8 @@ as importa.
 O que NÃO está aqui: a conversa com o usuário e a orquestração das
 etapas, que ficam em main.py -- o ponto de entrada do programa.
 
-Executado direto (`python etapa_listar_baixar.py`), este arquivo só
-chama main.py.
+Executado direto (`python -m automacoes.sigef_sei.etapa_listar_baixar`),
+este arquivo só chama main.py.
 """
 import json
 import os
@@ -51,7 +51,7 @@ from playwright.sync_api import (
 )
 
 # Reexportados: a etapa_sei2.py importa estes nomes daqui.
-from preparar_navegador import (  # noqa: F401
+from .preparar_navegador import (  # noqa: F401
     URL_SEI,
     URL_SIGEF_PORTAL,
     URL_SIGEF_LISTAR_OB,

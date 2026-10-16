@@ -27,8 +27,8 @@ import os
 from collections import OrderedDict, defaultdict
 from datetime import date, datetime, timedelta
 
-from etapa_listar_baixar import PASTA_BASE
-from metricas import ler_metricas
+from .etapa_listar_baixar import PASTA_BASE
+from .metricas import ler_metricas
 
 PASTA_RELATORIOS = os.path.join(PASTA_BASE, "relatorios")
 

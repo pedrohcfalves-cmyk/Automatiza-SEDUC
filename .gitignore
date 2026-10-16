@@ -57,13 +57,21 @@ progresso_sei_concluido.json
 
 # Dados que o programa grava na pasta de dados (normalmente em
 # Documentos\Automacao SIGEF-SEI, mas LBA_PASTA_DADOS pode apontar pra
-# cá): registros da janela, métricas, relatórios gerenciais, dados do
-# Amigo e preferências locais
+# cá): registros da janela, métricas, relatórios gerenciais e
+# preferências locais
 registros/
 metricas/
 relatorios/
-amigo/
 config.json
+
+# Dados que o BB grava ao lado do próprio arquivo quando roda sozinho
+# (python automacoes/bb/automacoes_bb.py):
+# configuração, PDFs de saldo/demonstrativo, perfil do Chrome do BB
+config_sistema_bb.json
+demonstrativos_pdf/
+saldos_carga/
+perfil_chrome_bb/
+debug_html/
 
 # Cópias de segurança feitas antes de uma alteração
 # (ex.: etapa_sei2.py.bak_antes_divisao)

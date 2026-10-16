@@ -70,7 +70,8 @@ def achar_iscc() -> str:
 
 def conferir_bibliotecas() -> None:
     faltando = []
-    for modulo, pacote in (("PyInstaller", "pyinstaller"), ("webview", "pywebview"), ("playwright", "playwright")):
+    for modulo, pacote in (("PyInstaller", "pyinstaller"), ("webview", "pywebview"), ("playwright", "playwright"),
+                           ("psutil", "psutil"), ("openpyxl", "openpyxl")):
         try:
             __import__(modulo)
         except ImportError:

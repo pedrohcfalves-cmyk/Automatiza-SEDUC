@@ -1,20 +1,18 @@
 """
-Os outros dois programas dentro da janela: Amigo (gera CE, NL, PP e OB
-no SIGEF a partir de uma planilha Excel) e Automações BB (carga de
-cartões no portal do Banco do Brasil).
+O outro programa dentro da janela: Automações BB (carga de cartões no
+portal do Banco do Brasil).
 
-A lógica de cada um continua no seu arquivo, sem mudança de regra:
+A lógica dele continua no seu arquivo, sem mudança de regra:
 
-    modulos/amigo.py           (era Amigo-6.5.py)
-    modulos/automacoes_bb.py   (era o núcleo do AutomacoesBB)
+    automacoes/bb/automacoes_bb.py  (era o núcleo do AutomacoesBB)
 
-Aqui fica só a ligação com a janela: ler/gravar a configuração de cada
-um, e rodar a automação escolhida numa thread própria. O que eles
-imprimem já cai no registro da janela (app_janela troca o sys.stdout),
-e o input() deles vira a caixa de pergunta da janela.
+Aqui fica só a ligação com a janela: ler/gravar a configuração e rodar
+a automação escolhida numa thread própria. O que ele imprime já cai no
+registro da janela (app_janela troca o sys.stdout), e o input() dele
+vira a caixa de pergunta da janela.
 
-UMA AUTOMAÇÃO POR VEZ: os três módulos (inclusive o SIGEF → SEI) usam o
-mesmo Chrome da automação. USO_DO_CHROME garante que nunca rodam juntos.
+UMA AUTOMAÇÃO POR VEZ: os dois módulos (SIGEF → SEI e BB) usam o mesmo
+Chrome da automação. USO_DO_CHROME garante que nunca rodam juntos.
 """
 import os
 import threading
@@ -28,23 +26,9 @@ os.environ.setdefault("BB_SEM_COR", "1")
 
 USO_DO_CHROME = threading.Lock()
 
-# Pedido de "parar depois da linha atual", para o Amigo (o BB tem o seu,
-# automacoes_bb.PEDIDO_PARADA).
-_PARAR_AMIGO = threading.Event()
-
-
-def configurar(pasta_base: str) -> None:
-    """Pasta de dados do Amigo: <pasta de dados do programa>\\amigo."""
-    os.environ.setdefault("AMIGO_PASTA_DADOS", os.path.join(pasta_base, "amigo"))
-
-
-def _amigo():
-    from modulos import amigo
-    return amigo
-
 
 def _bb():
-    from modulos import automacoes_bb as bb
+    from automacoes.bb import automacoes_bb as bb
     bb.limpar_tela = lambda: None   # sem terminal: o registro é contínuo
     return bb
 
@@ -94,8 +78,7 @@ def rodar(modulo: str, rotulo: str, funcao, emitir) -> dict:
 
 
 def parar() -> None:
-    """Parar depois da linha em andamento (Amigo e BB)."""
-    _PARAR_AMIGO.set()
+    """Parar depois da linha em andamento (BB: automacoes_bb.PEDIDO_PARADA)."""
     try:
         _bb().PEDIDO_PARADA.set()
     except Exception:
@@ -106,22 +89,6 @@ def parar() -> None:
     except NameError:
         pass
     print("⏹️  Parada pedida: a linha em andamento termina e a automação para.")
-
-
-class _LinhasParaveis(list):
-    """
-    As linhas da planilha do Amigo, com um freio: percorrendo com `for`,
-    a volta seguinte não começa depois de um pedido de parada -- a linha
-    em andamento sempre termina. (Acesso por índice, como o Gerar OB faz
-    em lotes, não é afetado.)
-    """
-
-    def __iter__(self):
-        for item in super().__iter__():
-            if _PARAR_AMIGO.is_set():
-                print("⏹️  Parado a pedido, antes da próxima linha.")
-                return
-            yield item
 
 
 # ------------------------------------------------------------ planilhas
@@ -144,61 +111,6 @@ def abas_da_planilha(caminho: str) -> list[str]:
             livro.close()
     except Exception:
         return []
-
-
-# ---------------------------------------------------------------- Amigo
-
-CAMPOS_AMIGO = ("caminho_planilha", "aba_planilha", "linha_inicial", "data", "processo", "mes_referencia")
-
-
-def amigo_estado() -> dict:
-    amigo = _amigo()
-    config = amigo.carregar_configuracoes()
-    return {
-        "config": {campo: config.get(campo, "") for campo in CAMPOS_AMIGO},
-        "programas": [{"numero": n, "nome": nome} for n, (nome, _f) in amigo.PROGRAMAS.items()],
-        "abas": abas_da_planilha(config.get("caminho_planilha", "")),
-        "dominio": amigo.DOMINIO_SIGEF,
-    }
-
-
-def amigo_salvar(valores: dict) -> dict:
-    amigo = _amigo()
-    config = amigo.carregar_configuracoes()
-    for campo in CAMPOS_AMIGO:
-        if campo in valores:
-            config[campo] = (valores[campo] or "").strip() if isinstance(valores[campo], str) else valores[campo]
-    try:
-        config["linha_inicial"] = max(1, int(config.get("linha_inicial") or 2))
-    except (TypeError, ValueError):
-        config["linha_inicial"] = 2
-    amigo.salvar_configuracoes(config)
-    return config
-
-
-def amigo_executar(valores: dict, numero: int, emitir) -> dict:
-    amigo = _amigo()
-    config = amigo_salvar(valores)
-    if numero not in amigo.PROGRAMAS:
-        return {"ok": False, "erro": "Escolha uma automação."}
-    if not config.get("caminho_planilha") or not os.path.exists(config["caminho_planilha"]):
-        return {"ok": False, "erro": "Escolha a planilha Excel."}
-    nome, funcao = amigo.PROGRAMAS[numero]
-    _PARAR_AMIGO.clear()
-
-    def tarefa():
-        print("Conectando ao arquivo Excel...")
-        planilha = amigo.conectar_planilha(config)
-        if planilha is None:
-            raise SystemExit("Não consegui abrir a planilha no Excel. Veja o registro.")
-        linha_inicial = config.get("linha_inicial", 2)
-        dados = amigo.ler_dados(planilha, linha_inicial)
-        if not dados:
-            raise SystemExit(f"Nenhuma linha para processar a partir da linha {linha_inicial}.")
-        print(f"{len(dados)} linha(s) lida(s) a partir da linha {linha_inicial}.")
-        funcao(_LinhasParaveis(dados), config, planilha)
-
-    return rodar("amigo", f"Amigo · {nome}", tarefa, emitir)
 
 
 # ------------------------------------------------------------------- BB

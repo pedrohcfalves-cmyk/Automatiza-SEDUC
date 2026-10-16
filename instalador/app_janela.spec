@@ -13,20 +13,33 @@ NOME = "Automacao SIGEF-SEI"
 a = Analysis(
     [os.path.join(RAIZ, "app_janela.py")],
     pathex=[RAIZ],
-    datas=[(os.path.join(RAIZ, "interface"), "interface")],
+    # A interface vai para janela/interface dentro do pacote, o mesmo
+    # caminho relativo que o app_janela.py usa rodando pelo código.
+    # O guia de uso e a licença do DARE vão para automacoes/dare, onde o
+    # módulo DARE os procura (config.RECURSOS).
+    datas=[
+        (os.path.join(RAIZ, "janela", "interface"), os.path.join("janela", "interface")),
+        (os.path.join(RAIZ, "automacoes", "dare", "GUIA_DE_USO.html"), os.path.join("automacoes", "dare")),
+        (os.path.join(RAIZ, "automacoes", "dare", "LICENCA.txt"), os.path.join("automacoes", "dare")),
+    ],
     # O Playwright entra pelo hook do pyinstaller-hooks-contrib, que leva o
     # driver (node) junto. Navegador próprio não precisa: a automação usa
     # o Chrome da máquina.
-    # Os módulos do Amigo e do BB (modulos/) são importados só quando a
-    # pessoa abre o módulo, então vão listados aqui, com o que eles usam:
-    # Excel via COM (pywin32), teclado/área de transferência (pyautogui,
-    # pyperclip -- o pyautogui precisa do tkinter), CDP cru (websocket) e
-    # leitura de .xlsx (openpyxl).
+    # O módulo do BB (automacoes/bb) é importado só quando a pessoa abre o
+    # módulo, então vai listado aqui, com o que ele usa: Excel via COM
+    # (pywin32), teclado/área de transferência (pyautogui, pyperclip -- o
+    # pyautogui precisa do tkinter), CDP cru (websocket) e leitura de
+    # .xlsx (openpyxl).
+    # O módulo DARE (janela/modulo_dare.py + automacoes/dare) também só é
+    # importado quando a pessoa abre o DARE; a aba Desempenho dele usa o
+    # psutil (CPU, memória, disco e rede).
     hiddenimports=[
         "webview.platforms.edgechromium", "clr",
-        "modulos.amigo", "modulos.automacoes_bb",
+        "automacoes.bb.automacoes_bb", "janela.licenca",
+        "janela.modulo_dare", "automacoes.dare.motor", "automacoes.dare.desempenho",
+        "automacoes.dare.excel_com", "automacoes.dare.planilha_arquivo", "automacoes.dare.limpeza",
         "win32com.client", "pythoncom", "pywintypes", "win32gui", "win32con", "win32api",
-        "pyautogui", "pyperclip", "websocket", "openpyxl",
+        "pyautogui", "pyperclip", "websocket", "openpyxl", "psutil",
     ],
     excludes=["unittest", "pydoc", "test"],
     noarchive=False,

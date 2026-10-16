@@ -49,9 +49,9 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from etapa_listar_baixar import PASTA_BASE, baixar_documentos, normalizar_processo_sei, salvar_sessao
-from metricas import Cronometro, formatar_duracao
-from etapa_sei2 import TEXTO_LINK_OB_NORMAL, TEXTO_LINK_OB_REGULARIZACAO, executar_sei2, ob_ja_concluida
+from .etapa_listar_baixar import PASTA_BASE, baixar_documentos, normalizar_processo_sei, salvar_sessao
+from .metricas import Cronometro, formatar_duracao
+from .etapa_sei2 import TEXTO_LINK_OB_NORMAL, TEXTO_LINK_OB_REGULARIZACAO, executar_sei2, ob_ja_concluida
 
 # Quantas vezes cada processo é tentado, e a espera entre uma tentativa e
 # outra (segundos) -- tempo para uma queda de internet passar.

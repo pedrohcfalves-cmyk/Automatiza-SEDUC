@@ -26,7 +26,7 @@ import os
 import time
 from datetime import datetime
 
-from etapa_listar_baixar import PASTA_BASE
+from .etapa_listar_baixar import PASTA_BASE
 
 PASTA_METRICAS = os.path.join(PASTA_BASE, "metricas")
 CAMINHO_METRICAS = os.path.join(PASTA_METRICAS, "metricas.csv")

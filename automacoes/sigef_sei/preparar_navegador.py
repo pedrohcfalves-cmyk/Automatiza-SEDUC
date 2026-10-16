@@ -1,4 +1,4 @@
-"""
+r"""
 Passo 0: preparar o navegador.
 
 Abre um Chrome dedicado à automação (perfil próprio, modo de depuração),
@@ -27,8 +27,9 @@ Guarda também os endereços dos dois sistemas (URL_SIGEF_PORTAL,
 URL_SIGEF_LISTAR_OB e URL_SEI), porque é este arquivo que abre as abas,
 e o aviso de conferência que a etapa do SEI mostra no fim.
 
-Rodando direto (`python preparar_navegador.py`), testa só esta parte,
-sem baixar nada. O programa completo é o main.py.
+Rodando direto (`python -m automacoes.sigef_sei.preparar_navegador`, da
+pasta do programa), testa só esta parte, sem baixar nada. O programa
+completo é o main.py.
 """
 import os
 import re
@@ -89,7 +90,7 @@ URL_SIGEF_LISTAR_OB = (
 URL_SEI = "https://sei.sistemas.ro.gov.br/sei/controlador.php?acao=procedimento_controlar"
 
 # Portal do Banco do Brasil (módulo BB): a entrada com chave J de governo,
-# a mesma que o programa BB abria (URLS_ABERTURA em modulos/automacoes_bb.py).
+# a mesma que o programa BB abria (URLS_ABERTURA em automacoes/bb/automacoes_bb.py).
 URL_BB_LOGIN = (
     "https://autoatendimento2.bb.com.br/apf-apj-acesso/index.html"
     "?ambiente=WEB_PESSOA_JURIDICA_CHAVEJ_GOVERNO&segmento=est#/transacao/acesso-apj/1"
@@ -153,8 +154,8 @@ def achar_chrome() -> str:
         "  1. Instale o Google Chrome (https://www.google.com/chrome/).\n"
         "  2. Rode este programa de novo.\n\n"
         "Se o Chrome JÁ está instalado, mas em outra pasta, abra o arquivo\n"
-        "preparar_navegador.py e acrescente o caminho dele na lista\n"
-        "CAMINHOS_CHROME_POSSIVEIS, lá no começo do arquivo.\n"
+        "automacoes\\sigef_sei\\preparar_navegador.py e acrescente o caminho\n"
+        "dele na lista CAMINHOS_CHROME_POSSIVEIS, lá no começo do arquivo.\n"
     )
 
 

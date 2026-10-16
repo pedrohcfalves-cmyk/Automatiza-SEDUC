@@ -3,10 +3,10 @@ A automação SIGEF -> SEI numa janela, no lugar da tela preta.
 
     python app_janela.py        (ou o atalho do programa instalado)
 
-Faz o mesmo que o main.py, na mesma ordem, e usa as mesmas funções dos
-outros três arquivos. O que muda é só a conversa com o usuário: botões
+Faz o mesmo que o main.py, na mesma ordem, e usa as mesmas funções das
+etapas em automacoes/sigef_sei/. O que muda é só a conversa com o usuário: botões
 e campos em vez de print() e input(). A interface é uma página HTML
-(pasta interface/) aberta numa janela própria pelo pywebview.
+(pasta janela/interface/) aberta numa janela própria pelo pywebview.
 
 COMO AS DUAS PONTAS CONVERSAM
 
@@ -35,7 +35,7 @@ import traceback
 
 # Onde estão index.html, css e js: dentro do pacote, quando instalado.
 PASTA_PROGRAMA = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
-PASTA_INTERFACE = os.path.join(PASTA_PROGRAMA, "interface")
+PASTA_INTERFACE = os.path.join(PASTA_PROGRAMA, "janela", "interface")
 
 # Os documentos baixados e a sessão vão para Documentos\Automacao
 # SIGEF-SEI: quem decide é o PASTA_BASE do etapa_listar_baixar.
@@ -142,20 +142,19 @@ sys.stderr = SaidaParaJanela(sys.stderr)
 
 
 # Só depois de trocar a saída: os módulos imprimem já no import.
-from etapa_listar_baixar import (  # noqa: E402
+from automacoes.sigef_sei.etapa_listar_baixar import (  # noqa: E402
     PASTA_BASE,
     baixar_documentos,
     carregar_sessao,
     normalizar_processo_sei,
     salvar_sessao,
 )
-import etapa_sei2  # noqa: E402
-import metricas  # noqa: E402
-import relatorio_gerencial  # noqa: E402
-import modulos_janela  # noqa: E402
+from automacoes.sigef_sei import etapa_sei2  # noqa: E402
+from automacoes.sigef_sei import metricas  # noqa: E402
+from automacoes.sigef_sei import relatorio_gerencial  # noqa: E402
+from janela import modulos_janela  # noqa: E402
+from janela import licenca  # noqa: E402
 from datetime import date  # noqa: E402
-
-modulos_janela.configurar(PASTA_BASE)
 
 # Preferências que valem entre uma abertura e outra (ex.: o tempo manual
 # por OB usado no relatório gerencial).
@@ -180,9 +179,9 @@ def _gravar_config(**valores) -> None:
         pass
 
 gravar_registro_em(PASTA_BASE)
-import lote  # noqa: E402
+from automacoes.sigef_sei import lote  # noqa: E402
 from main import VERSAO  # noqa: E402
-from preparar_navegador import (  # noqa: E402
+from automacoes.sigef_sei.preparar_navegador import (  # noqa: E402
     DOMINIO_BB,
     DOMINIO_SEI,
     DOMINIO_SIGEF,
@@ -291,12 +290,12 @@ class Trabalhador(threading.Thread):
             comando, argumentos = self.comandos.get()
             if comando == "sair":
                 break
-            # Baixar/anexar mexe no Chrome: não roda junto com o Amigo ou o BB.
+            # Baixar/anexar mexe no Chrome: não roda junto com o BB nem com o DARE.
             usa_chrome = comando in ("processar", "lote")
             if usa_chrome and not modulos_janela.USO_DO_CHROME.acquire(blocking=False):
                 ponte.emitir(
                     "erro", fase=comando,
-                    mensagem="Outra automação (Amigo ou BB) está usando o Chrome agora. "
+                    mensagem="Outra automação (BB ou DARE) está usando o Chrome agora. "
                              "Espere ela terminar e clique em “Continuar de onde parou”.",
                 )
                 continue
@@ -323,7 +322,7 @@ class Trabalhador(threading.Thread):
 
         print("Conferindo as abas dos sistemas:")
         # O SIGEF abre no PORTAL: entrar direto na tela da OB sem sessão
-        # dá o alerta de "sessão expirada" (ver preparar_navegador.py).
+        # dá o alerta de "sessão expirada" (ver automacoes/sigef_sei/preparar_navegador.py).
         self.aba_sigef = abrir_ou_reusar_aba(self.context, DOMINIO_SIGEF, URL_SIGEF_PORTAL, "SIGEF")
         abrir_ou_reusar_aba(self.context, DOMINIO_SEI, URL_SEI, "SEI")
         # O portal do BB (módulo Banco do Brasil) abre junto, já na entrada
@@ -461,6 +460,19 @@ def _item_para_tela(item) -> dict:
 trabalhador = Trabalhador()
 
 
+_dare = {"modulo": None}
+
+
+def _modulo_dare():
+    """O módulo DARE (janela/modulo_dare.py), importado e ligado à janela na 1ª vez."""
+    if _dare["modulo"] is None:
+        from janela import modulo_dare
+
+        modulo_dare.configurar(ponte.emitir, lambda: ponte.janela)
+        _dare["modulo"] = modulo_dare
+    return _dare["modulo"]
+
+
 # --------------------------------------------- O que a janela pode chamar
 
 
@@ -574,25 +586,13 @@ class Api:
         alvo = caminho if caminho and os.path.isdir(caminho) else PASTA_BASE
         os.startfile(alvo)
 
-    # ---- Amigo (SIGEF) e Banco do Brasil ----
+    # ---- Banco do Brasil ----
     # Cada chamada que importa o módulo pela primeira vez pode demorar um
     # pouco (Excel/COM, pyautogui); o JS mostra "carregando" enquanto isso.
 
     def _erro_modulo(self, erro: Exception) -> dict:
         print(traceback.format_exc())
         return {"ok": False, "erro": f"{type(erro).__name__}: {erro}"}
-
-    def amigo_estado(self) -> dict:
-        try:
-            return {"ok": True, **modulos_janela.amigo_estado()}
-        except Exception as erro:
-            return self._erro_modulo(erro)
-
-    def amigo_executar(self, valores: dict, numero) -> dict:
-        try:
-            return modulos_janela.amigo_executar(valores or {}, int(numero), ponte.emitir)
-        except Exception as erro:
-            return self._erro_modulo(erro)
 
     def bb_estado(self) -> dict:
         try:
@@ -616,7 +616,7 @@ class Api:
         return modulos_janela.abas_da_planilha(caminho or "")
 
     def escolher_planilha_modulo(self):
-        """Janela de 'abrir arquivo' para a planilha do Amigo ou do BB."""
+        """Janela de 'abrir arquivo' para a planilha do BB."""
         import webview
 
         escolhido = ponte.janela.create_file_dialog(
@@ -627,6 +627,17 @@ class Api:
             return None
         caminho = escolhido[0]
         return {"caminho": caminho, "abas": modulos_janela.abas_da_planilha(caminho)}
+
+    # ---- DARE ----
+    # Uma porta só: a página DARE (interface/dare.js) chama dare("acao", {...}).
+    # O módulo só é carregado na primeira chamada -- quem não usa o DARE não
+    # paga o tempo de importar.
+
+    def dare(self, acao: str, dados: dict = None) -> dict:
+        try:
+            return _modulo_dare().chamar(acao, dados or {})
+        except Exception as erro:
+            return self._erro_modulo(erro)
 
     # ---- relatório gerencial ----
 
@@ -660,12 +671,89 @@ class Api:
         return {"ok": True, "caminho": caminho}
 
 
-def main() -> None:
-    import webview
+HTML_ATIVACAO = """<!doctype html><html lang="pt-br"><head><meta charset="utf-8">
+<style>
+ body{font-family:Segoe UI,Arial,sans-serif;background:#F4F6F9;color:#1f2a37;margin:0;padding:28px}
+ h1{font-size:20px;margin:0 0 6px} p{margin:6px 0 14px;color:#4b5563;font-size:14px}
+ .codigo{display:flex;gap:10px;align-items:center;margin:8px 0 18px}
+ .codigo b{font-family:Consolas,monospace;font-size:24px;letter-spacing:2px;background:#fff;
+   border:1px solid #d1d5db;border-radius:8px;padding:8px 14px}
+ textarea{width:100%;box-sizing:border-box;height:96px;font-family:Consolas,monospace;font-size:12px;
+   border:1px solid #d1d5db;border-radius:8px;padding:8px}
+ button{background:#0b3d91;color:#fff;border:0;border-radius:8px;padding:9px 18px;font-size:14px;cursor:pointer}
+ button.sec{background:#e5e7eb;color:#1f2a37}
+ #msg{margin-top:12px;font-size:14px;min-height:20px} .erro{color:#b91c1c} .ok{color:#15803d}
+</style></head><body>
+<h1>Ativação do programa</h1>
+<p id="motivo"></p>
+<p>Envie este <b>código da máquina</b> para quem administra as licenças:</p>
+<div class="codigo"><b id="codigo">...</b><button class="sec" onclick="copiar()">Copiar</button></div>
+<p>Depois, cole aqui a chave de licença recebida:</p>
+<textarea id="chave" placeholder="SIGEFSEI-..."></textarea>
+<div style="margin-top:12px"><button onclick="ativar()">Ativar</button></div>
+<div id="msg"></div>
+<script>
+ function msg(t, c){ const m=document.getElementById('msg'); m.textContent=t; m.className=c||''; }
+ window.addEventListener('pywebviewready', async () => {
+   const e = await pywebview.api.estado();
+   document.getElementById('codigo').textContent = e.codigo;
+   document.getElementById('motivo').textContent = 'Licença: ' + e.motivo + '.';
+ });
+ async function copiar(){ const r = await pywebview.api.copiar_codigo();
+   msg(r ? 'Código copiado.' : 'Selecione o código e copie com Ctrl+C.', r ? 'ok' : ''); }
+ async function ativar(){
+   const t = document.getElementById('chave').value;
+   if(!t.trim()){ msg('Cole a chave recebida.', 'erro'); return; }
+   if(!window.pywebview || !pywebview.api || !pywebview.api.ativar){
+     msg('A janela ainda está carregando. Aguarde um instante e clique de novo.', 'erro'); return; }
+   msg('Conferindo...');
+   // Nunca mais "Conferindo..." para sempre: erro do Python ou 20s sem
+   // resposta aparecem na tela.
+   const limite = new Promise((_, falha) => setTimeout(
+     () => falha(new Error('o programa não respondeu em 20 segundos')), 20000));
+   try {
+     const r = await Promise.race([pywebview.api.ativar(t), limite]);
+     if(r && r.ok){ msg('Licença ativada para ' + r.nome + ' até ' + r.validade + '. Abrindo o programa...', 'ok'); }
+     else { msg((r && r.erro) || 'Não ativou.', 'erro'); }
+   } catch(e) {
+     msg('Não foi possível ativar: ' + (e && e.message ? e.message : e) + '. Feche e abra o programa e tente de novo.', 'erro');
+   }
+ }
+</script></body></html>"""
 
+
+def _titulo_com_licenca(situacao: dict) -> str:
+    titulo = "Central de Automações"
+    if situacao.get("valida"):
+        titulo += f"  —  licenciado para {situacao['nome']} até {situacao['validade']}"
+    return titulo
+
+
+def _confirmar_fechar() -> bool:
+    """
+    Fechar a janela com o DARE processando: pergunta antes, como o aplicativo
+    DARE fazia. False cancela o fechamento (evento "closing" do pywebview, que
+    roda na thread da janela -- por isso a caixa nativa do Windows).
+    """
+    modulo = _dare["modulo"]
+    if modulo is None or not modulo.executando() or os.name != "nt":
+        return True
+    import ctypes
+
+    texto = ("Há lançamentos do DARE sendo processados agora.\n\n"
+             "Se fechar, o lançamento atual pode ficar pela metade. Os que não foram concluídos "
+             "ficam guardados como pendentes.\n\nFechar mesmo assim?")
+    # MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2 | MB_TASKMODAL; IDYES = 6
+    try:
+        return ctypes.windll.user32.MessageBoxW(None, texto, "Central de Automações", 0x4 | 0x30 | 0x100 | 0x2000) == 6
+    except Exception:  # noqa: BLE001 - sem a caixa, fecha como antes
+        return True
+
+
+def _criar_janela_principal(webview, situacao: dict):
     trabalhador.start()
     janela = webview.create_window(
-        "Central de Automações",
+        _titulo_com_licenca(situacao),
         url=os.path.join(PASTA_INTERFACE, "index.html"),
         js_api=Api(),
         width=1120,
@@ -675,6 +763,84 @@ def main() -> None:
         text_select=True,
     )
     ponte.janela = janela
+    try:
+        janela.events.closing += _confirmar_fechar
+    except AttributeError:  # pywebview sem eventos: fecha sem perguntar
+        pass
+    if situacao.get("aviso"):
+        print(f"⚠️  {situacao['aviso']}")
+    return janela
+
+
+class ApiAtivacao:
+    """
+    Janela de ativação: aparece no lugar da principal enquanto não houver licença.
+
+    ATENÇÃO: nada de atributo PÚBLICO guardando objetos do pywebview. Ele
+    percorre os atributos públicos da js_api para expor ao JavaScript; com a
+    janela num atributo público ele entrava em janela.native..., recursão
+    infinita, e a ponte JS -> Python nunca ficava pronta ("Conferindo..."
+    para sempre). Por isso _webview e _janela.
+    """
+
+    def __init__(self, webview):
+        self._webview = webview
+        self._janela = None
+
+    def estado(self) -> dict:
+        return licenca.estado()
+
+    def copiar_codigo(self) -> bool:
+        try:
+            import pyperclip
+            pyperclip.copy(licenca.codigo_da_maquina())
+            return True
+        except Exception:
+            return False
+
+    def ativar(self, texto: str) -> dict:
+        try:
+            situacao = licenca.ativar(texto)
+        except licenca.ErroLicenca as erro:
+            return {"ok": False, "erro": f"Não ativou: {erro}."}
+        except Exception as erro:
+            _registrar_erro_ativacao()
+            return {"ok": False, "erro": f"Erro inesperado ao conferir a chave: {erro}"}
+        try:
+            # Primeiro abre a principal, depois fecha esta: fechar a única
+            # janela aberta encerraria o programa.
+            _criar_janela_principal(self._webview, situacao)
+            threading.Timer(1.5, self._janela.destroy).start()
+        except Exception as erro:
+            _registrar_erro_ativacao()
+            return {"ok": False, "erro": f"Licença ativada, mas a janela principal não abriu "
+                                         f"({erro}). Feche e abra o programa de novo."}
+        return {"ok": True, "nome": situacao["nome"], "validade": situacao["validade"]}
+
+
+def _registrar_erro_ativacao() -> None:
+    try:
+        os.makedirs(licenca.PASTA_LICENCA, exist_ok=True)
+        with open(os.path.join(licenca.PASTA_LICENCA, "erro_ativacao.log"), "a",
+                  encoding="utf-8") as arquivo:
+            arquivo.write(f"--- {time.strftime('%d/%m/%Y %H:%M:%S')}\n{traceback.format_exc()}\n")
+    except OSError:
+        pass
+
+
+def main() -> None:
+    import webview
+
+    situacao = licenca.estado()
+    if situacao["valida"]:
+        _criar_janela_principal(webview, situacao)
+    else:
+        api = ApiAtivacao(webview)
+        api._janela = webview.create_window(
+            "Central de Automações — ativação", html=HTML_ATIVACAO, js_api=api,
+            width=640, height=520, resizable=False, background_color="#F4F6F9",
+            text_select=True,
+        )
     # Guarda o estado da janela (WebView2) fora da pasta de dados.
     pasta_janela = os.path.join(
         os.environ.get("LOCALAPPDATA", PASTA_BASE), "Automacao SIGEF-SEI", "janela"
@@ -684,8 +850,9 @@ def main() -> None:
     # Janela fechada: destrava quem estiver esperando resposta e solta o
     # Chrome. O Chrome em si continua aberto, como no main.py.
     _respostas.put(None)
-    trabalhador.comandos.put(("sair", {}))
-    trabalhador.join(timeout=3)
+    if trabalhador.is_alive():
+        trabalhador.comandos.put(("sair", {}))
+        trabalhador.join(timeout=3)
     os._exit(0)
 
 

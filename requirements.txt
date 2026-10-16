@@ -12,4 +12,6 @@ playwright>=1.44        # controla o Chrome (conexão CDP)
 pymupdf>=1.24           # converte os PDFs do SIGEF em JPG
 pillow>=10.0            # trata as imagens antes de anexar no SEI
 pywebview>=5.0          # a janela do programa (app_janela.py)
-openpyxl>=3.1            # lê as planilhas do modo lote (lote.py)
+openpyxl>=3.1           # lê as planilhas (modo lote do SEI e importação do DARE)
+psutil>=5.9             # DARE: aba Desempenho (CPU, memória, disco e rede)
+pywin32>=306; sys_platform == "win32"   # Excel aberto (BB e importação do DARE)

@@ -1,0 +1,58 @@
+﻿TERMO DE LICENÇA DE USO
+Automação SIGEF - SEI (Central de Automações)
+
+Leia com atenção. Ao instalar ou usar o Programa, você concorda com este termo.
+Se não concordar, não instale nem use o Programa.
+
+1. OBJETO
+Este termo concede a você uma licença de uso do programa "Automação SIGEF - SEI"
+(o "Programa"), que automatiza tarefas nos sistemas SIGEF, SEI e no
+Autoatendimento do Banco do Brasil, usando o acesso e as credenciais do próprio
+usuário.
+
+2. LICENÇA
+2.1. A licença é pessoal, não exclusiva e intransferível, e vale somente para o
+computador e pelo prazo indicados na chave de ativação emitida pelo titular.
+2.2. O Programa só funciona com uma chave de ativação válida. Vencida a chave,
+o uso depende de renovação.
+2.3. Todos os direitos sobre o Programa (código, telas, documentação) pertencem
+ao seu titular. Esta licença não transfere nenhum direito de propriedade.
+
+3. É PROIBIDO
+a) copiar, distribuir, emprestar, vender ou ceder o Programa ou a chave de
+   ativação a terceiros;
+b) modificar, descompilar ou fazer engenharia reversa do Programa, salvo nos
+   casos permitidos em lei;
+c) contornar, desativar ou alterar o controle de licença;
+d) usar o Programa para fins ilícitos ou em desacordo com as normas do órgão
+   em que você trabalha.
+
+4. RESPONSABILIDADE DO USUÁRIO
+4.1. O Programa age nos sistemas com o SEU login e as SUAS permissões. Toda
+operação feita por ele é de sua responsabilidade, como se feita manualmente.
+4.2. Antes de confirmar cargas de limite, pagamentos ou inclusões de documentos,
+você deve conferir os dados (cartões, processos, valores e documentos). O
+Programa oferece conferências e modo de simulação, mas não substitui a
+conferência humana.
+4.3. Você deve manter suas senhas em sigilo. O Programa não armazena nem envia
+suas senhas.
+
+5. GARANTIA E LIMITAÇÃO DE RESPONSABILIDADE
+5.1. O Programa é fornecido "no estado em que se encontra". Os sistemas
+externos (SIGEF, SEI, Banco do Brasil) podem mudar sem aviso e afetar o
+funcionamento do Programa.
+5.2. Na extensão permitida pela lei, o titular não responde por perdas, danos,
+lançamentos indevidos ou interrupções decorrentes do uso ou da impossibilidade
+de uso do Programa, nem por operações não conferidas pelo usuário.
+
+6. DADOS
+O Programa trabalha no seu computador. Os arquivos que ele baixa e os registros
+que gera ficam na sua pasta Documentos e não são enviados ao titular nem a
+terceiros.
+
+7. ENCERRAMENTO
+A licença termina ao fim do prazo da chave ou se este termo for descumprido.
+Encerrada a licença, você deve parar de usar o Programa.
+
+8. DISPOSIÇÕES GERAIS
+Este termo é regido pelas leis da República Federativa do Brasil.
