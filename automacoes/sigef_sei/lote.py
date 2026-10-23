@@ -292,7 +292,8 @@ class Relatorio:
 
 
 def processar_lote(
-    context, aba_sigef, itens: list[ItemLote], ao_mudar=None, deve_parar=None, ao_etapa=None
+    context, aba_sigef, itens: list[ItemLote], ao_mudar=None, deve_parar=None, ao_etapa=None,
+    documentos=None,
 ) -> tuple[list[Resultado], str]:
     """
     Processa os itens válidos, um por vez. Devolve (resultados, caminho
@@ -305,6 +306,9 @@ def processar_lote(
     `ao_etapa(nome, **dados)` marca as fases de cada processo: "sigef"
     antes do download, "resumo" (com `dados`) depois dele e "sei" antes
     de anexar.
+
+    `documentos` (ver documentos.py): os tipos marcados na janela, os
+    mesmos para todos os processos da lista. None é todos.
     """
     avisar = ao_mudar or (lambda indice, resultado: None)
     etapa = ao_etapa or (lambda nome, **dados: None)
@@ -336,14 +340,16 @@ def processar_lote(
                 salvar_sessao(processo=item.processo, ob=item.ob, tipo_ob=item.tipo_ob)
                 cron.etapa("sigef")
                 etapa("sigef")
-                dados = baixar_documentos(context, aba_sigef, item.processo, item.ob)
+                dados = baixar_documentos(
+                    context, aba_sigef, item.processo, item.ob, documentos=documentos
+                )
                 resultado.pasta = dados.get("pasta_processo") or ""
                 etapa("resumo", dados=dados)
                 cron.etapa("sei")
                 etapa("sei")
                 executar_sei2(
                     context, item.processo, dados=dados, tipo_ob=item.tipo_ob,
-                    conferir_no_fim=False, avisos_saida=avisos,
+                    conferir_no_fim=False, avisos_saida=avisos, documentos=documentos,
                 )
                 if item.ja_concluida:
                     avisos.insert(0, AVISO_JA_ANEXADA)

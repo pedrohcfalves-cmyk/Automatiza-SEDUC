@@ -200,6 +200,18 @@
         </button>
       </div>
 
+      <!-- Quais documentos baixar e anexar: vale para "Um processo" e para "Vários processos". -->
+      <fieldset class="campo campo-docs" id="campo-docs">
+        <legend>Documentos para anexar no SEI</legend>
+        <div class="opcoes-docs">
+        <label class="doc-opcao"><input type="checkbox" class="chk-doc" value="CE" checked><span class="caixa"><svg class="ic"><use href="#i-check"/></svg></span><span class="texto"><b>CE</b><small>Despesa Certificada</small></span></label>
+        <label class="doc-opcao"><input type="checkbox" class="chk-doc" value="NL" checked><span class="caixa"><svg class="ic"><use href="#i-check"/></svg></span><span class="texto"><b>NL</b><small>Nota de Lançamento</small></span></label>
+        <label class="doc-opcao"><input type="checkbox" class="chk-doc" value="PP" checked><span class="caixa"><svg class="ic"><use href="#i-check"/></svg></span><span class="texto"><b>PP</b><small>Preparação de Pagamento</small></span></label>
+        <label class="doc-opcao"><input type="checkbox" class="chk-doc" value="OB" checked><span class="caixa"><svg class="ic"><use href="#i-check"/></svg></span><span class="texto"><b>OB</b><small>Ordem Bancária</small></span></label>
+        </div>
+        <div class="dica" id="dica-docs">Desmarque o que não precisa: o programa nem baixa do SIGEF o que ficar desmarcado.</div>
+      </fieldset>
+
       <form class="formulario" id="form-dados" autocomplete="off" novalidate>
         <div class="campo" id="campo-processo">
           <label for="in-processo">Número do processo no SEI</label>
@@ -298,7 +310,7 @@
       <header class="cabeca">
         <p class="sobre" id="exec-sobre">Passo 4 de 5</p>
         <h1>Trabalhando no processo <span class="mono" id="exec-processo">—</span></h1>
-        <p class="lead">OB <span class="mono" id="exec-ob">—</span>, que entra no SEI como <b id="exec-tipo">—</b>. Deixe o Chrome da automação aberto e evite clicar nele até o fim.</p>
+        <p class="lead">OB <span class="mono" id="exec-ob">—</span>, que entra no SEI como <b id="exec-tipo">—</b>. Documentos: <b id="exec-docs">CE, NL, PP e OB</b>. Deixe o Chrome da automação aberto e evite clicar nele até o fim.</p>
       </header>
 
       <div class="fases">

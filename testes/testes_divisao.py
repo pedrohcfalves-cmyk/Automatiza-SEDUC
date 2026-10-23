@@ -519,7 +519,8 @@ class TestaNomesUsadosPorFora(unittest.TestCase):
             return [a.arg for a in argumentos.args + argumentos.kwonlyargs]
 
         self.assertEqual(parametros("executar_sei2"),
-                         ["context", "processo", "dados", "tipo_ob", "conferir_no_fim", "avisos_saida"])
+                         ["context", "processo", "dados", "tipo_ob", "conferir_no_fim", "avisos_saida",
+                          "documentos"])
         self.assertEqual(parametros("ob_ja_concluida"), ["processo", "ob", "pasta_base"])
         self.assertEqual(parametros("_anexar_documento"),
                          ["context", "aba_sei", "progresso", "avisos", "chave", "descricao", "texto_link",

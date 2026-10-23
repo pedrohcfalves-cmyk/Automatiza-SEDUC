@@ -150,6 +150,7 @@ from automacoes.sigef_sei.etapa_listar_baixar import (  # noqa: E402
     salvar_sessao,
 )
 from automacoes.sigef_sei import etapa_sei2  # noqa: E402
+from automacoes.sigef_sei.documentos import DOCUMENTOS, normalizar_documentos  # noqa: E402
 from automacoes.sigef_sei import metricas  # noqa: E402
 from automacoes.sigef_sei import relatorio_gerencial  # noqa: E402
 from janela import modulos_janela  # noqa: E402
@@ -354,7 +355,7 @@ class Trabalhador(threading.Thread):
             print("O navegador da automação tinha sido fechado -- abrindo de novo.")
             self._conectar()
 
-    def _processar(self, processo: str, ob: str, tipo_ob: str) -> None:
+    def _processar(self, processo: str, ob: str, tipo_ob: str, documentos=None) -> None:
         self._garantir_conexao()
 
         salvar_sessao(processo=processo, ob=ob, tipo_ob=tipo_ob)
@@ -365,12 +366,14 @@ class Trabalhador(threading.Thread):
         try:
             cron.etapa("sigef")
             ponte.emitir("etapa", etapa="sigef")
-            dados = baixar_documentos(self.context, self.aba_sigef, processo, ob)
+            dados = baixar_documentos(self.context, self.aba_sigef, processo, ob, documentos=documentos)
             ponte.emitir("resumo", resumo=_resumo(dados))
 
             cron.etapa("sei")
             ponte.emitir("etapa", etapa="sei")
-            etapa_sei2.executar_sei2(self.context, processo, dados=dados, tipo_ob=tipo_ob)
+            etapa_sei2.executar_sei2(
+                self.context, processo, dados=dados, tipo_ob=tipo_ob, documentos=documentos
+            )
         except Encerrado:
             cron.registrar("parado", dados=dados, mensagem="Janela fechada")
             raise
@@ -383,7 +386,7 @@ class Trabalhador(threading.Thread):
         tempos = cron.registrar("ok", dados=dados)
         ponte.emitir("concluido", processo=processo, ob=dados.get("ob", ob), tempos=tempos)
 
-    def _lote(self, itens: list) -> None:
+    def _lote(self, itens: list, documentos=None) -> None:
         self._garantir_conexao()
         self.parar_lote.clear()
         validos = [item for item in itens if item.valido]
@@ -405,6 +408,7 @@ class Trabalhador(threading.Thread):
         resultados, relatorio = lote.processar_lote(
             self.context, self.aba_sigef, validos,
             ao_mudar=ao_mudar, deve_parar=self.parar_lote.is_set, ao_etapa=ao_etapa,
+            documentos=documentos,
         )
         ponte.emitir(
             "lote_fim", relatorio=relatorio,
@@ -436,6 +440,8 @@ def _resumo(dados: dict) -> dict:
             for numero, arquivos in dados.get("grupos_ce", [])
         ],
         "obs": nomes(dados.get("arquivos_ob", [])),
+        # Os tipos marcados na janela (pacote antigo, sem a chave: todos).
+        "documentos": list(normalizar_documentos(dados.get("documentos"))),
         "lancamentos": [
             {
                 "pp": item.get("pp"),
@@ -505,7 +511,19 @@ class Api:
     def validar_processo(self, texto: str):
         return normalizar_processo_sei(texto or "")
 
-    def processar(self, processo: str, ob: str, tipo_ob: str = None) -> dict:
+    @staticmethod
+    def _documentos_escolhidos(documentos):
+        """
+        As caixas CE/NL/PP/OB marcadas no passo 3, ou None se nenhuma
+        válida veio marcada. Sem a lista (janela antiga): todos.
+        """
+        if documentos is None:
+            return DOCUMENTOS
+        if not any(str(d).strip().upper() in DOCUMENTOS for d in documentos):
+            return None
+        return normalizar_documentos(documentos)
+
+    def processar(self, processo: str, ob: str, tipo_ob: str = None, documentos=None) -> dict:
         normalizado = normalizar_processo_sei(processo or "")
         ob = (ob or "").strip().upper()
         if not normalizado:
@@ -514,10 +532,15 @@ class Api:
             return {"ok": False, "campo": "ob"}
         if tipo_ob not in TIPOS_OB:
             return {"ok": False, "campo": "tipo"}
+        escolhidos = self._documentos_escolhidos(documentos)
+        if not escolhidos:
+            return {"ok": False, "campo": "documentos"}
         trabalhador.comandos.put(
-            ("processar", {"processo": normalizado, "ob": ob, "tipo_ob": TIPOS_OB[tipo_ob]})
+            ("processar", {"processo": normalizado, "ob": ob, "tipo_ob": TIPOS_OB[tipo_ob],
+                           "documentos": list(escolhidos)})
         )
-        return {"ok": True, "processo": normalizado, "ob": ob, "tipo_ob": tipo_ob}
+        return {"ok": True, "processo": normalizado, "ob": ob, "tipo_ob": tipo_ob,
+                "documentos": list(escolhidos)}
 
     # ---- lote ----
 
@@ -554,8 +577,14 @@ class Api:
     def reler_lote(self, tipo_padrao: str) -> dict:
         return self._ler(tipo_padrao)
 
-    def processar_lote(self, somente_linhas=None) -> dict:
-        """Roda a última lista lida. `somente_linhas` refaz só essas (os que deram erro)."""
+    def processar_lote(self, somente_linhas=None, documentos=None) -> dict:
+        """
+        Roda a última lista lida. `somente_linhas` refaz só essas (os que
+        deram erro). `documentos`: as caixas CE/NL/PP/OB marcadas.
+        """
+        escolhidos = self._documentos_escolhidos(documentos)
+        if not escolhidos:
+            return {"ok": False, "campo": "documentos"}
         itens = [item for item in self._itens if item.valido]
         if somente_linhas:
             linhas = set(somente_linhas)
@@ -566,7 +595,7 @@ class Api:
             item.ja_concluida = etapa_sei2.ob_ja_concluida(item.processo, item.ob)
         if not itens:
             return {"ok": False}
-        trabalhador.comandos.put(("lote", {"itens": itens}))
+        trabalhador.comandos.put(("lote", {"itens": itens, "documentos": list(escolhidos)}))
         return {"ok": True, "quantidade": len(itens)}
 
     def parar_lote(self) -> None:

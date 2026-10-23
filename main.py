@@ -42,7 +42,7 @@ except Exception:
 # Versão do programa. Impressa no começo de cada rodada: já aconteceu de
 # uma cópia antiga ficar na pasta e rodar no lugar da nova, e o carimbo
 # na tela resolve isso na hora. SUBA A CADA MUDANÇA de comportamento.
-VERSAO = "3.7"
+VERSAO = "3.8"
 
 # Terminado o download, anexa no SEI na mesma rodada. Desligue para
 # parar depois do download e anexar por fora com

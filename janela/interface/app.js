@@ -10,6 +10,7 @@
 
   const $ = (id) => document.getElementById(id);
   const ORDEM = ["inicio", "login", "dados", "execucao", "conferencia"];
+  const DOCUMENTOS = ["CE", "NL", "PP", "OB"];
 
   const estado = {
     pasta: "",
@@ -17,6 +18,7 @@
     processo: "",
     ob: "",
     tipoOb: "",
+    documentos: DOCUMENTOS.slice(), // os marcados quando o processo/lote começou
     tiposOb: {
       regularizacao: "OB - Ordem Bancária de Regularização",
       ordem_bancaria: "OB - Ordem Bancária",
@@ -143,7 +145,10 @@
     estado.pastaProcesso = r.pasta || "";
     const n = r.lancamentos.length;
     const ces = r.ces || [];
-    estado.totalDocsSei = ces.length + (r.obs.length ? 1 : 0) + 2 * n;
+    const docs = r.documentos || DOCUMENTOS;
+    const tem = (sigla) => docs.includes(sigla);
+    estado.totalDocsSei =
+      (tem("CE") ? ces.length : 0) + (tem("OB") && r.obs.length ? 1 : 0) + (tem("NL") ? n : 0) + (tem("PP") ? n : 0);
     estado.docsSei = 0;
 
     const linhas = r.lancamentos
@@ -162,7 +167,7 @@
     $("resumo").innerHTML = `
       <div class="resumo-cab">
         <h3><svg class="ic"><use href="#i-doc"/></svg>Baixado do SIGEF — OB <span class="mono">${esc(r.ob)}</span></h3>
-        <span class="nota">${ces.length} CE(s) distinta(s) · OB: ${r.obs.length} pág. · ${n} PP(s)</span>
+        <span class="nota">${ces.length} CE(s) distinta(s) · OB: ${r.obs.length} pág. · ${n} PP(s)${docs.length < DOCUMENTOS.length ? ` · anexando só ${esc(descreverDocs(docs))}` : ""}</span>
       </div>
       <table>
         <thead><tr><th>#</th><th>PP</th><th>CE</th><th style="text-align:right">Valor</th><th>Situação</th></tr></thead>
@@ -426,6 +431,27 @@
     return d.length === 16 ? `${d.slice(0, 4)}.${d.slice(4, 10)}/${d.slice(10, 14)}-${d.slice(14)}` : null;
   }
 
+  // ---- Documentos para anexar (caixas CE / NL / PP / OB)
+
+  const documentosEscolhidos = () =>
+    [...document.querySelectorAll(".chk-doc")].filter((c) => c.checked).map((c) => c.value);
+
+  function descreverDocs(docs) {
+    const d = DOCUMENTOS.filter((x) => (docs || DOCUMENTOS).includes(x));
+    return d.length <= 1 ? d.join("") : `${d.slice(0, -1).join(", ")} e ${d[d.length - 1]}`;
+  }
+
+  const DICA_DOCS = "Desmarque o que não precisa: o programa nem baixa do SIGEF o que ficar desmarcado.";
+
+  /* Confere que há pelo menos um marcado. Devolve a lista, ou null. */
+  function conferirDocumentos() {
+    const docs = documentosEscolhidos();
+    const ok = docs.length > 0;
+    $("campo-docs").classList.toggle("invalido", !ok);
+    $("dica-docs").textContent = ok ? DICA_DOCS : "Marque pelo menos um documento para anexar.";
+    return ok ? docs : null;
+  }
+
   const tipoEscolhido = () => (document.querySelector('input[name="tipo-ob"]:checked') || {}).value || "";
 
   function marcarTipo(tipo) {
@@ -437,19 +463,25 @@
     const processo = await conferirProcesso(true);
     const obOk = conferirOb(true);
     const tipo = tipoEscolhido();
+    const docs = conferirDocumentos();
     $("campo-tipo").classList.toggle("invalido", !tipo);
     if (!processo) return $("in-processo").focus();
     if (!obOk) return $("in-ob").focus();
     if (!tipo) return document.querySelector('input[name="tipo-ob"]').focus();
+    if (!docs) return document.querySelector(".chk-doc").focus();
 
     const r = api
-      ? await api.processar($("in-processo").value, $("in-ob").value, tipo)
-      : { ok: true, processo, ob: $("in-ob").value.trim().toUpperCase(), tipo_ob: tipo };
-    if (!r.ok) return r.campo === "tipo" ? document.querySelector('input[name="tipo-ob"]').focus() : $(`in-${r.campo}`).focus();
+      ? await api.processar($("in-processo").value, $("in-ob").value, tipo, docs)
+      : { ok: true, processo, ob: $("in-ob").value.trim().toUpperCase(), tipo_ob: tipo, documentos: docs };
+    if (!r.ok) {
+      if (r.campo === "documentos") return conferirDocumentos(), document.querySelector(".chk-doc").focus();
+      return r.campo === "tipo" ? document.querySelector('input[name="tipo-ob"]').focus() : $(`in-${r.campo}`).focus();
+    }
 
     estado.processo = r.processo;
     estado.ob = r.ob;
     estado.tipoOb = r.tipo_ob;
+    estado.documentos = r.documentos || docs;
     iniciarExecucao();
     if (!api) demo.processar();
   }
@@ -525,9 +557,12 @@
     }, 350);
   }
 
-  async function iniciarLote(somenteLinhas) {
-    const r = api ? await api.processar_lote(somenteLinhas || null) : { ok: true };
+  async function iniciarLote(somenteLinhas, documentos) {
+    const docs = documentos || conferirDocumentos();
+    if (!docs) return document.querySelector(".chk-doc").focus();
+    const r = api ? await api.processar_lote(somenteLinhas || null, docs) : { ok: true };
     if (!r.ok) return;
+    estado.documentos = docs;
     estado.modo = "lote";
     estado.lote.itens = [];
     iniciarExecucao();
@@ -539,6 +574,7 @@
     $("exec-processo").textContent = estado.processo;
     $("exec-ob").textContent = estado.ob;
     $("exec-tipo").textContent = estado.tiposOb[estado.tipoOb] || "—";
+    $("exec-docs").textContent = descreverDocs(estado.documentos);
     $("erro").hidden = true;
     $("resumo").hidden = true;
     $("conf-avisos").hidden = true;
@@ -620,7 +656,7 @@
       $("btn-parar-lote").textContent = "Vai parar ao fim deste processo";
     };
     $("btn-lote-refazer").onclick = () =>
-      iniciarLote(estado.lote.resultados.filter((r) => r.estado === "erro").map((r) => r.linha));
+      iniciarLote(estado.lote.resultados.filter((r) => r.estado === "erro").map((r) => r.linha), estado.documentos);
     $("btn-lote-relatorio").onclick = () => api && api.abrir_arquivo(estado.lote.relatorio);
     $("btn-lote-novo").onclick = () => {
       $("in-lista").value = "";
@@ -643,6 +679,7 @@
     document.querySelectorAll('input[name="tipo-ob"]').forEach((r) =>
       r.addEventListener("change", () => $("campo-tipo").classList.remove("invalido"))
     );
+    document.querySelectorAll(".chk-doc").forEach((c) => c.addEventListener("change", conferirDocumentos));
 
     $("btn-conf-ok").onclick = () => {
       fase("conf", "feita");
@@ -660,12 +697,12 @@
     $("btn-erro-voltar").onclick = irParaDados;
     $("btn-erro-continuar").onclick = async () => {
       if (estado.modo === "lote") {
-        if (!estado.lote.itens.length) return iniciarLote(); // parou antes de começar
+        if (!estado.lote.itens.length) return iniciarLote(null, estado.documentos); // parou antes de começar
         const faltam = estado.lote.itens.filter((i) => i.estado !== "ok").map((i) => i.linha);
-        return faltam.length ? iniciarLote(faltam) : irParaDados();
+        return faltam.length ? iniciarLote(faltam, estado.documentos) : irParaDados();
       }
       if (api) {
-        const r = await api.processar(estado.processo, estado.ob, estado.tipoOb);
+        const r = await api.processar(estado.processo, estado.ob, estado.tipoOb, estado.documentos);
         if (!r.ok) return irParaDados();
       }
       iniciarExecucao();
@@ -761,7 +798,7 @@
         L("   📄 Nota de Lançamento: 1 JPG(s)"),
         L("\n▶️  2/2: PP 2026PP066791 (valor 3.215,40)"),
         L("\n▶️  Por último: Ordem Bancária 2026OB136475"),
-        { tipo: "resumo", resumo: { ob: "2026OB136475", pasta: "", ces: [{ numero: "2026CE001234", paginas: 1 }, { numero: "2026CE001235", paginas: 1 }], obs: ["OB_1.jpg"], lancamentos: [
+        { tipo: "resumo", resumo: { documentos: estado.documentos, ob: "2026OB136475", pasta: "", ces: [{ numero: "2026CE001234", paginas: 1 }, { numero: "2026CE001235", paginas: 1 }], obs: ["OB_1.jpg"], lancamentos: [
           { pp: "2026PP066790", ce: "2026CE001234", valor: "12.480,00", ok: true, arquivos: ["a", "b", "c"] },
           { pp: "2026PP066791", ce: "2026CE001235", valor: "3.215,40", ok: true, arquivos: ["a", "b", "c"] } ] } },
         { tipo: "etapa", etapa: "sei" },

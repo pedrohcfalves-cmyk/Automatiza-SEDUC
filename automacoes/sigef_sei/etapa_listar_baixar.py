@@ -59,6 +59,8 @@ from .preparar_navegador import (  # noqa: F401
     conectar_chrome,
     preparar_navegador,
 )
+from .documentos import descrever as descrever_documentos
+from .documentos import filtrar_pacote, normalizar_documentos
 
 
 # ---------------------------------------------------------------- SIGEF
@@ -527,20 +529,29 @@ def _sequencial_ob(ob: str) -> str:
     return re.sub(r"^\d+OB", "", (ob or "").strip().upper())
 
 
-def download_ja_feito(processo: str, ob: str) -> dict | None:
+def download_ja_feito(processo: str, ob: str, documentos=None) -> dict | None:
     """
     O pacote do último download, se ele foi desta OB, deste processo, e
     chegou ao fim com todos os arquivos ainda na pasta. Senão, None.
 
     É o que evita baixar tudo de novo quando a falha foi depois, no SEI
     (quase sempre a internet caindo na hora de colar o documento).
+
+    `documentos` (ver documentos.py): o último download só serve se
+    trouxe TODOS os tipos pedidos agora. Sessão sem "download_documentos"
+    é de antes da escolha existir, quando tudo era baixado. O pacote
+    devolvido vem só com os tipos pedidos.
     """
+    pedidos = normalizar_documentos(documentos)
     sessao = carregar_sessao()
     if not sessao.get("download_completo"):
         return None
     if sessao.get("download_processo") != processo:
         return None
     if _sequencial_ob(sessao.get("lancamentos_ob")) != _sequencial_ob(ob):
+        return None
+    baixados = set(normalizar_documentos(sessao.get("download_documentos")))
+    if not set(pedidos) <= baixados:
         return None
 
     # Sessão de uma versão com CE única ("arquivos_ce", sem "grupos_ce"):
@@ -562,7 +573,7 @@ def download_ja_feito(processo: str, ob: str) -> dict | None:
     if not lancamentos or not caminhos or not all(os.path.exists(c) for c in caminhos):
         return None
 
-    return {
+    return filtrar_pacote({
         "processo": processo,
         "ob": sessao["lancamentos_ob"],
         "pasta_processo": sessao.get("pasta_processo"),
@@ -570,7 +581,7 @@ def download_ja_feito(processo: str, ob: str) -> dict | None:
         "arquivos_ob": sessao.get("arquivos_ob") or [],
         "lancamentos": lancamentos,
         "avisos_download": sessao.get("avisos_download") or [],
-    }
+    }, pedidos)
 
 
 def _baixar_nl(context, aba_sigef, pasta_destino: str, pp: str, numero_nl: str) -> list[str]:
@@ -667,6 +678,7 @@ def baixar_documentos(
     pasta_base: str = PASTA_BASE,
     gravar_sessao: bool = True,
     reaproveitar: bool = True,
+    documentos=None,
 ) -> dict:
     """
     Igual a _baixar_documentos_uma_vez(), mas recomeça sozinho quando uma
@@ -684,6 +696,7 @@ def baixar_documentos(
             return _baixar_documentos_uma_vez(
                 context, aba_sigef, processo, ob,
                 pasta_base=pasta_base, gravar_sessao=gravar_sessao, reaproveitar=reaproveitar,
+                documentos=documentos,
             )
         except PlaywrightError as erro:
             if "has been closed" not in str(erro) or tentativa == TENTATIVAS_JANELA_FECHADA:
@@ -709,9 +722,17 @@ def _baixar_documentos_uma_vez(
     pasta_base: str = PASTA_BASE,
     gravar_sessao: bool = True,
     reaproveitar: bool = True,
+    documentos=None,
 ) -> dict:
     """
     Baixa do SIGEF a CE, as NLs, as PPs e a OB de uma Ordem Bancária.
+
+    `documentos` (ver documentos.py) diz quais desses tipos baixar; None
+    é todos. O caminho entre as telas é o MESMO de sempre -- a OB é
+    pesquisada e cada PP é aberta para ler o número da CE e da NL --; o
+    que não foi marcado só não tem o Imprimir clicado. A única exceção é
+    quando só a OB foi marcada: aí as PPs nem são abertas (nada nelas é
+    preciso).
 
     Os JPGs vão pra uma subpasta com o número do processo. O retorno é o
     pacote que executar_sei2() recebe: arquivos já separados por tipo de
@@ -726,9 +747,12 @@ def _baixar_documentos_uma_vez(
     sem abrir o SIGEF: é a volta depois de uma falha no SEI.
     """
     ob = (ob or "").strip().upper()
+    documentos = normalizar_documentos(documentos)
+    marcados = set(documentos)
+    print(f"🗂️  Documentos marcados para esta OB: {descrever_documentos(documentos)}")
 
     if reaproveitar:
-        pronto = download_ja_feito(processo, ob)
+        pronto = download_ja_feito(processo, ob, documentos)
         if pronto is not None:
             qtd = len(pronto["lancamentos"])
             print(
@@ -868,7 +892,21 @@ def _baixar_documentos_uma_vez(
     ce_baixadas: dict[str, list[str]] = {}   # número da CE -> JPGs já baixados
     grupos_ce: list[tuple[str, list[str]]] = []   # [(número, [jpgs...]), ...], uma entrada por CE distinta
 
-    for indice, (pp, valor) in enumerate(pps_da_grade, start=1):
+    # Só a OB marcada: nada da tela da PP é preciso -- não abre nenhuma.
+    # Os lançamentos (um por PP) continuam existindo, sem arquivos, para
+    # o resumo e a sessão ficarem no mesmo formato de sempre.
+    abrir_pps = bool(marcados & {"CE", "NL", "PP"})
+    if not abrir_pps:
+        print("   ➖ Só a OB foi marcada -- não abro as PPs (CE, NL e PP não serão baixadas).")
+        for pp, valor in pps_da_grade:
+            lancamentos.append({
+                "pp": pp, "ob": ob_completa, "valor": valor,
+                "numero_ce": None, "numero_nl": None,
+                "arquivos_ce": [], "arquivos_nl": [], "arquivos_pp": [],
+                "arquivos_anexar": [], "url_pp": "", "anexo_baixado": True,
+            })
+
+    for indice, (pp, valor) in enumerate(pps_da_grade if abrir_pps else [], start=1):
         print(f"\n▶️  {indice}/{len(pps_da_grade)}: PP {pp} (valor {valor})")
 
         # 6.A  Abre a PP. Reencontra a linha pelo NÚMERO, não por posição:
@@ -910,6 +948,11 @@ def _baixar_documentos_uma_vez(
         if not numero_ce:
             print(f"   ⏭️  PP {pp} não tem Despesa Certificada vinculada -- pulando a CE.")
             numero_ce = None
+            arquivos_desta_ce = []
+        elif "CE" not in marcados:
+            # Não clica no campo: sem abrir a CE, o SIGEF também não
+            # desvia a janela da PP (ver o "voltando" logo abaixo).
+            print(f"   ➖ Despesa Certificada {numero_ce} não foi marcada -- não baixo.")
             arquivos_desta_ce = []
         else:
             chave_ce = numero_ce
@@ -980,34 +1023,39 @@ def _baixar_documentos_uma_vez(
         numero_nl = numero_vinculado(pagina_pp, "#txtNotaLancamento")
         if not numero_nl:
             print(f"   ⏭️  PP {pp} não tem Nota de Lançamento vinculada -- pulando a NL.")
+        elif "NL" not in marcados:
+            print(f"   ➖ Nota de Lançamento {numero_nl} não foi marcada -- não baixo.")
         else:
             print(f"   📝 Nota de Lançamento {numero_nl}: baixo no fim, pela tela de NLs.")
 
         # 6.D  A própria PP: a tela já está aberta, começa no Imprimir dela.
+        #      Não marcada: a tela da PP abriu só para ler a CE e a NL.
+        if "PP" in marcados:
+            with context.expect_page() as pagina_formato_info:
+                pagina_pp.locator('a[title="Gerar Relatório"]').click()
 
-        with context.expect_page() as pagina_formato_info:
-            pagina_pp.locator('a[title="Gerar Relatório"]').click()
+            pagina_formato = pagina_formato_info.value
+            pagina_formato.wait_for_load_state("networkidle")
 
-        pagina_formato = pagina_formato_info.value
-        pagina_formato.wait_for_load_state("networkidle")
+            caminho_pdf_temp = os.path.join(pasta_destino, "temp_pp.pdf")
 
-        caminho_pdf_temp = os.path.join(pasta_destino, "temp_pp.pdf")
+            with context.expect_event("download") as download_info:
+                pagina_formato.locator(
+                    'img[alt="Imprime Arquivo Formato PostScript (.pdf)"]'
+                ).click()
 
-        with context.expect_event("download") as download_info:
-            pagina_formato.locator(
-                'img[alt="Imprime Arquivo Formato PostScript (.pdf)"]'
-            ).click()
+            download_info.value.save_as(caminho_pdf_temp)
 
-        download_info.value.save_as(caminho_pdf_temp)
+            novos_jpg = pdf_para_jpg(
+                caminho_pdf_temp, pasta_destino, nome_arquivo=f"Preparação de Pagamento - PP {pp}"
+            )
+            os.remove(caminho_pdf_temp)
+            arquivos_pp_desta_pp += novos_jpg
+            print(f"   📄 Preparação de Pagamento: {len(novos_jpg)} JPG(s)")
 
-        novos_jpg = pdf_para_jpg(
-            caminho_pdf_temp, pasta_destino, nome_arquivo=f"Preparação de Pagamento - PP {pp}"
-        )
-        os.remove(caminho_pdf_temp)
-        arquivos_pp_desta_pp += novos_jpg
-        print(f"   📄 Preparação de Pagamento: {len(novos_jpg)} JPG(s)")
-
-        pagina_formato.close()
+            pagina_formato.close()
+        else:
+            print(f"   ➖ Preparação de Pagamento {pp} não foi marcada -- não baixo.")
 
         # 6.E  Fecha a PP e volta pra grade.
         pagina_pp.close()
@@ -1032,7 +1080,7 @@ def _baixar_documentos_uma_vez(
             # Lista achatada (CE desta PP + NL + PP), só pro resumo.
             "arquivos_anexar": arquivos_desta_ce + arquivos_desta_pp,
             "url_pp": url_pp,
-            "anexo_baixado": bool(arquivos_desta_pp),
+            "anexo_baixado": bool(arquivos_desta_pp) if "PP" in marcados else True,
         })
 
         # Grava a cada volta: parando no meio, o que já baixou não se perde.
@@ -1070,7 +1118,7 @@ def _baixar_documentos_uma_vez(
     nls_baixadas: dict[str, list[str]] = {}   # número da NL -> JPGs
     for lancamento in lancamentos:
         numero_nl, pp = lancamento.get("numero_nl"), lancamento["pp"]
-        if not numero_nl:
+        if not numero_nl or "NL" not in marcados:
             continue
 
         if numero_nl in nls_baixadas:
@@ -1102,6 +1150,8 @@ def _baixar_documentos_uma_vez(
         lancamento["arquivos_nl"] = novos_jpg
         lancamento["arquivos_anexar"] = lancamento["arquivos_ce"] + novos_jpg + lancamento["arquivos_pp"]
         lancamento["anexo_baixado"] = bool(novos_jpg or lancamento["arquivos_pp"])
+        if "PP" not in marcados:
+            lancamento["anexo_baixado"] = bool(novos_jpg)
 
         if gravar_sessao:
             salvar_sessao(lancamentos=lancamentos, avisos_download=avisos_download)
@@ -1109,69 +1159,73 @@ def _baixar_documentos_uma_vez(
     aba_sigef.bring_to_front()
 
     # 7.C  Ordem Bancária, por último.
-    print(f"\n▶️  Por último: Ordem Bancária {ob_completa}")
+    #      Não marcada: não pesquisa nem imprime -- só deixa a aba pronta (7.E).
+    if "OB" in marcados:
+        print(f"\n▶️  Por último: Ordem Bancária {ob_completa}")
 
-    # Pesquisa a OB na tela de Conferência.
-    aba_sigef.goto(URL_SIGEF_IMPRIMIR_OB_CONFERENCIA)
-    aba_sigef.wait_for_load_state("networkidle")
+        # Pesquisa a OB na tela de Conferência.
+        aba_sigef.goto(URL_SIGEF_IMPRIMIR_OB_CONFERENCIA)
+        aba_sigef.wait_for_load_state("networkidle")
 
-    aba_sigef.locator("#txtCdGestao_SIGEFPesquisa").fill(GESTAO_PESQUISA)
+        aba_sigef.locator("#txtCdGestao_SIGEFPesquisa").fill(GESTAO_PESQUISA)
 
-    # ⚠️ Este campo recusa '2026OB136475' e só aceita o sequencial
-    #    ('136475') -- confirmado ao vivo.
-    #
-    # A tela é um intervalo: o fim leva a MESMA OB de propósito. Em
-    # branco, o SIGEF imprimiria da OB pesquisada em diante.
-    aba_sigef.locator("#txtOrdemBancariaAInicio_SIGEFPesquisa").fill(ob_sequencial)
+        # ⚠️ Este campo recusa '2026OB136475' e só aceita o sequencial
+        #    ('136475') -- confirmado ao vivo.
+        #
+        # A tela é um intervalo: o fim leva a MESMA OB de propósito. Em
+        # branco, o SIGEF imprimiria da OB pesquisada em diante.
+        aba_sigef.locator("#txtOrdemBancariaAInicio_SIGEFPesquisa").fill(ob_sequencial)
 
-    campo_ob_fim = aba_sigef.locator("#txtOrdemBancariaAFim_SIGEFPesquisa")
-    if campo_ob_fim.count() > 0:
-        campo_ob_fim.fill(ob_sequencial)
+        campo_ob_fim = aba_sigef.locator("#txtOrdemBancariaAFim_SIGEFPesquisa")
+        if campo_ob_fim.count() > 0:
+            campo_ob_fim.fill(ob_sequencial)
 
-    print(f"   🔎 Pesquisando a OB como '{ob_sequencial}' (gestão {GESTAO_PESQUISA})")
+        print(f"   🔎 Pesquisando a OB como '{ob_sequencial}' (gestão {GESTAO_PESQUISA})")
 
-    # ⚠️ Imprimir pelo TITLE, não pelo id: o id bate em dois elementos
-    #    (o <a> 'btnBotoesImpressao_btnImprimir' e o <img>
-    #    'btnBotoesImpressao_BtnImprimir') porque o SIGEF roda em modo
-    #    quirks, e o Playwright para com "strict mode violation".
-    try:
-        with context.expect_page(timeout=30000) as pagina_formato_info:
-            aba_sigef.locator('a[title="Gerar Relatório"]').click()
-    except PlaywrightTimeoutError:
-        raise SystemExit(
-            f"❌ Cliquei em Imprimir na tela de Conferência pra OB "
-            f"{ob_completa} (pesquisada como '{ob_sequencial}', gestão "
-            f"{GESTAO_PESQUISA}), mas a janela 'Selecione o tipo de "
-            "arquivo' não abriu.\n"
-            "   Olhe a tela do SIGEF que ficou aberta: se ela estiver "
-            "mostrando alguma crítica, é o número ou a gestão que não "
-            "bateram.\n"
-            "   As PPs (CE, NL e PP) já foram baixadas e estão salvas na "
-            "sessão -- nada se perdeu."
+        # ⚠️ Imprimir pelo TITLE, não pelo id: o id bate em dois elementos
+        #    (o <a> 'btnBotoesImpressao_btnImprimir' e o <img>
+        #    'btnBotoesImpressao_BtnImprimir') porque o SIGEF roda em modo
+        #    quirks, e o Playwright para com "strict mode violation".
+        try:
+            with context.expect_page(timeout=30000) as pagina_formato_info:
+                aba_sigef.locator('a[title="Gerar Relatório"]').click()
+        except PlaywrightTimeoutError:
+            raise SystemExit(
+                f"❌ Cliquei em Imprimir na tela de Conferência pra OB "
+                f"{ob_completa} (pesquisada como '{ob_sequencial}', gestão "
+                f"{GESTAO_PESQUISA}), mas a janela 'Selecione o tipo de "
+                "arquivo' não abriu.\n"
+                "   Olhe a tela do SIGEF que ficou aberta: se ela estiver "
+                "mostrando alguma crítica, é o número ou a gestão que não "
+                "bateram.\n"
+                "   As PPs (CE, NL e PP) já foram baixadas e estão salvas na "
+                "sessão -- nada se perdeu."
+            )
+
+        pagina_formato = pagina_formato_info.value
+
+        pagina_formato.wait_for_load_state("networkidle")
+
+        # 7.D  PDF -> JPG.
+        caminho_pdf_temp = os.path.join(pasta_destino, "temp_ob.pdf")
+
+        with context.expect_event("download") as download_info:
+            pagina_formato.locator(
+                'img[alt="Imprime Arquivo Formato PostScript (.pdf)"]'
+            ).click()
+
+        download_info.value.save_as(caminho_pdf_temp)
+
+        novos_jpg = pdf_para_jpg(
+            caminho_pdf_temp, pasta_destino, nome_arquivo=f"Ordem Bancária - OB {ob_completa}"
         )
+        os.remove(caminho_pdf_temp)
+        arquivos_ob += novos_jpg
+        print(f"   📄 Ordem Bancária: {len(novos_jpg)} JPG(s)")
 
-    pagina_formato = pagina_formato_info.value
-
-    pagina_formato.wait_for_load_state("networkidle")
-
-    # 7.D  PDF -> JPG.
-    caminho_pdf_temp = os.path.join(pasta_destino, "temp_ob.pdf")
-
-    with context.expect_event("download") as download_info:
-        pagina_formato.locator(
-            'img[alt="Imprime Arquivo Formato PostScript (.pdf)"]'
-        ).click()
-
-    download_info.value.save_as(caminho_pdf_temp)
-
-    novos_jpg = pdf_para_jpg(
-        caminho_pdf_temp, pasta_destino, nome_arquivo=f"Ordem Bancária - OB {ob_completa}"
-    )
-    os.remove(caminho_pdf_temp)
-    arquivos_ob += novos_jpg
-    print(f"   📄 Ordem Bancária: {len(novos_jpg)} JPG(s)")
-
-    pagina_formato.close()
+        pagina_formato.close()
+    else:
+        print(f"\n➖ Ordem Bancária {ob_completa} não foi marcada -- não baixo.")
 
     # 7.E  Volta pra "Listar Ordem Bancária", pronta pra próxima OB.
     #
@@ -1204,6 +1258,7 @@ def _baixar_documentos_uma_vez(
         "arquivos_ob": arquivos_ob,
         "lancamentos": lancamentos,
         "avisos_download": avisos_download,
+        "documentos": list(documentos),
     }
 
     if gravar_sessao:
@@ -1216,6 +1271,7 @@ def _baixar_documentos_uma_vez(
             avisos_download=avisos_download,
             download_completo=True,
             download_processo=processo,
+            download_documentos=list(documentos),
         )
 
     return dados_para_sei2

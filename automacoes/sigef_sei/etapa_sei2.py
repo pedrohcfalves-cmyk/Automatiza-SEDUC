@@ -65,6 +65,10 @@ from .etapa_listar_baixar import (
     nome_pasta_valido,
     obter_ou_criar_aba,
 )
+from .documentos import NOMES as NOMES_DOCUMENTOS
+from .documentos import descrever as descrever_documentos
+from .documentos import filtrar_pacote, normalizar_documentos
+from .documentos import todos as todos_documentos
 
 # Lugares candidatos pra procurar os botões/links da tela do processo,
 # em ordem de prioridade. None = aba_sei direto; qualquer outro valor é
@@ -1752,9 +1756,21 @@ def _anexar_parte(
 # ==== Fluxo principal ====
 
 
+def _tem_arquivo(dados: dict) -> bool:
+    """True se o pacote do download traz pelo menos um arquivo para anexar."""
+    if any(arquivos for _numero, arquivos in dados.get("grupos_ce") or []):
+        return True
+    if dados.get("arquivos_ob"):
+        return True
+    return any(
+        item.get("arquivos_nl") or item.get("arquivos_pp")
+        for item in dados.get("lancamentos") or []
+    )
+
+
 def executar_sei2(
     context, processo: str, dados: dict = None, tipo_ob: str = None,
-    conferir_no_fim: bool = True, avisos_saida: list = None,
+    conferir_no_fim: bool = True, avisos_saida: list = None, documentos=None,
 ):
     """
     Segunda metade do fluxo: pega o que a etapa_listar_baixar.py baixou
@@ -1794,17 +1810,36 @@ def executar_sei2(
     processos, quando o lote termina. Os avisos desta OB (documento
     vazio que sobrou de uma queda, por exemplo) vão para `avisos_saida`.
 
+    `documentos` (ver documentos.py): quais tipos anexar -- os que o
+    usuário deixou marcados na janela. None é todos, como sempre foi. Os
+    não marcados são simplesmente pulados; a ordem dos marcados não muda.
+
     Retorna a aba do SEI (Page).
     """
     if tipo_ob is None:
         tipo_ob = carregar_sessao().get("tipo_ob") or TEXTO_LINK_OB_REGULARIZACAO
 
+    documentos = normalizar_documentos(documentos)
+    marcados = set(documentos)
+    restrito = not todos_documentos(documentos)
+    if restrito and dados is not None:
+        dados = filtrar_pacote(dados, documentos)
+        # Sem nenhum arquivo dos tipos marcados, NÃO deixa cair na busca
+        # pelos nomes na pasta (resolver_dados_da_etapa_anterior): ela
+        # acharia arquivos de OUTRAS OBs do mesmo processo.
+        if not _tem_arquivo(dados):
+            raise SystemExit(
+                f"\n⚠️  Nenhum dos documentos marcados ({descrever_documentos(documentos)}) "
+                f"existe nesta OB -- não há nada para anexar no processo '{processo}'.\n"
+                "Volte, marque os documentos que a OB tem e rode de novo.\n"
+            )
+
     # ---- o que anexar, e de onde isso veio ----
     pacote = resolver_dados_da_etapa_anterior(processo, dados)
-    grupos_ce = pacote["grupos_ce"]
-    arquivos_ob = pacote["arquivos_ob"]
-    grupos_nl = pacote["grupos_nl"]
-    grupos_pp = pacote["grupos_pp"]
+    grupos_ce = pacote["grupos_ce"] if "CE" in marcados else []
+    arquivos_ob = pacote["arquivos_ob"] if "OB" in marcados else []
+    grupos_nl = pacote["grupos_nl"] if "NL" in marcados else []
+    grupos_pp = pacote["grupos_pp"] if "PP" in marcados else []
 
     total = (
         sum(len(a) for _numero, a in grupos_ce)
@@ -1827,15 +1862,18 @@ def executar_sei2(
         f"-- {total} imagem(ns) no total."
     )
 
-    # Os quatro tipos são esperados; faltar algum é aviso, não erro --
-    # o resto continua sendo anexado.
-    for rotulo, tem in (
-        ("CE (Despesa Certificada)", bool(grupos_ce)),
-        ("OB (Ordem Bancária)", bool(arquivos_ob)),
-        ("NL (Nota de Lançamento)", bool(grupos_nl)),
-        ("PP (Preparação de Pagamento)", bool(grupos_pp)),
+    # Os tipos marcados são esperados; faltar algum é aviso, não erro --
+    # o resto continua sendo anexado. Os não marcados só são lembrados.
+    # (➖ e não ⏭️: a janela conta as linhas "⏭️ CE..." como documento.)
+    for sigla, rotulo, tem in (
+        ("CE", "CE (Despesa Certificada)", bool(grupos_ce)),
+        ("OB", "OB (Ordem Bancária)", bool(arquivos_ob)),
+        ("NL", "NL (Nota de Lançamento)", bool(grupos_nl)),
+        ("PP", "PP (Preparação de Pagamento)", bool(grupos_pp)),
     ):
-        if not tem:
+        if sigla not in marcados:
+            print(f"➖ {NOMES_DOCUMENTOS[sigla]} não foi marcada -- não será incluída.")
+        elif not tem:
             print(f"⚠️  Nada de {rotulo} -- esse documento não será incluído.")
 
     # O que já foi feito no SEI para esta OB, se for uma nova tentativa.
@@ -1937,7 +1975,7 @@ def executar_sei2(
     # a gerência enquanto ainda dá pra corrigir.
     print()
     print(
-        f"Etapa SEI (2) concluída: CE, NL, PP e OB anexados no processo "
+        f"Etapa SEI (2) concluída: {descrever_documentos(documentos)} anexados no processo "
         f"'{processo}'."
     )
     aviso_conferencia_final(processo, avisos)
