@@ -155,6 +155,7 @@ from automacoes.sigef_sei import metricas  # noqa: E402
 from automacoes.sigef_sei import relatorio_gerencial  # noqa: E402
 from janela import modulos_janela  # noqa: E402
 from janela import licenca  # noqa: E402
+from janela import cache_janela  # noqa: E402
 from datetime import date  # noqa: E402
 
 # Preferências que valem entre uma abertura e outra (ex.: o tempo manual
@@ -874,6 +875,9 @@ def main() -> None:
     pasta_janela = os.path.join(
         os.environ.get("LOCALAPPDATA", PASTA_BASE), "Automacao SIGEF-SEI", "janela"
     )
+    # Antes de a janela abrir: sem isso o WebView2 pode mostrar a tela da
+    # versão anterior (ver janela/cache_janela.py).
+    cache_janela.limpar(pasta_janela)
     webview.start(private_mode=False, storage_path=pasta_janela)
 
     # Janela fechada: destrava quem estiver esperando resposta e solta o
