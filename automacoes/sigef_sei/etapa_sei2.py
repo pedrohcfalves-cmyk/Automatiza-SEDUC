@@ -1379,7 +1379,16 @@ def _incluir_e_editar_documento(
         antes_de_criar()
 
     with context.expect_page() as pagina_editor_info:
-        frame_tipo.locator("#btnSalvar").first.click()
+        botao_salvar = frame_tipo.locator("#btnSalvar").first
+        try:
+            botao_salvar.click(timeout=10000)
+        except PlaywrightError:
+            # Árvore de processo gigante: o clique do Playwright falha nas
+            # checagens de visibilidade/estabilidade da página pesada, mas o
+            # clique manual funciona. Dispara o mesmo clique direto no DOM
+            # (executa o onclick="confirmarDados()" do botão).
+            print("Clique em 'Salvar' falhou; repetindo direto no DOM (árvore grande).")
+            botao_salvar.evaluate("el => el.click()")
 
     pagina_editor = pagina_editor_info.value
     _aguardar_rede(pagina_editor)
