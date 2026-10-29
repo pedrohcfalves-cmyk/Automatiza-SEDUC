@@ -186,6 +186,10 @@ def abrir_chrome_debug(porta: int, urls=()) -> None:
         "--no-first-run",
         "--no-default-browser-check",
         "--start-maximized",
+        # O SEI abre o editor do documento em janela nova (popup) depois do
+        # Salvar; quando o SEI demora, o Chrome bloqueia esse popup e o
+        # documento fica criado, em branco, sem editor.
+        "--disable-popup-blocking",
     ]
     comando += list(urls)
 
@@ -227,6 +231,11 @@ def _tratador_dialogo(dialog) -> None:
     """
     try:
         print(f"\n💬 Diálogo do navegador fechado sozinho: [{dialog.type}] {dialog.message}")
+    except Exception:
+        pass
+    try:  # também no diagnostico_salvar.log, para ligar o alerta ao Salvar que o causou
+        from .etapa_sei2 import _diag
+        _diag(f"DIÁLOGO do navegador: [{dialog.type}] {dialog.message!r}")
     except Exception:
         pass
     try:

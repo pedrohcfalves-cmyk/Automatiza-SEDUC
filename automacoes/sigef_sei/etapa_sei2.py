@@ -52,6 +52,7 @@ import re
 import tempfile
 import time
 import unicodedata
+from urllib.parse import urljoin
 
 from playwright.sync_api import Error as PlaywrightError, TimeoutError as PlaywrightTimeoutError
 
@@ -1358,12 +1359,337 @@ def _incluir_documento(aba_sei, texto_link: str, rotulo: str, numero_pp: str = N
     return frame_tipo
 
 
+# ==== Diagnóstico do botão Salvar (processos com árvore gigante) ====
+#
+# Grava em Documentos\Automacao SIGEF-SEI\diagnostico_salvar.log o que o
+# Playwright vê no formulário e o erro EXATO do clique. Só observa: nunca
+# muda o que a automação faz, e uma falha ao gravar o log é ignorada.
+
+ARQUIVO_DIAGNOSTICO = os.path.join(PASTA_BASE, "diagnostico_salvar.log")
+
+_JS_ESTADO_BOTAO = """el => {
+    const r = el.getBoundingClientRect();
+    const estilo = getComputedStyle(el);
+    const topo = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return {
+        tabindex: el.getAttribute('tabindex'), disabled: el.disabled,
+        rect: [r.left, r.top, r.width, r.height].map(Math.round),
+        janela: [window.innerWidth, window.innerHeight],
+        display: estilo.display, visibility: estilo.visibility,
+        readyState: document.readyState,
+        confirmarDados: typeof window.confirmarDados,
+        no_ponto_do_clique: topo ? topo.tagName + '#' + topo.id + '.' + topo.className : null,
+        e_o_proprio_botao: !!topo && (topo === el || el.contains(topo)),
+    };
+}"""
+
+
+def _diag(texto: str) -> None:
+    try:
+        with open(ARQUIVO_DIAGNOSTICO, "a", encoding="utf-8") as arquivo:
+            arquivo.write(f"{time.strftime('%d/%m %H:%M:%S')} {texto}\n")
+    except OSError:
+        pass
+
+
+_ambiente_gravado = False
+
+
+def _diag_ambiente(context) -> None:
+    """Uma vez por execução: o que muda de uma máquina para outra (Chrome, Playwright, PC)."""
+    global _ambiente_gravado
+    if _ambiente_gravado:
+        return
+    _ambiente_gravado = True
+    try:
+        import platform
+
+        try:
+            from playwright._repo_version import version as versao_playwright
+        except Exception:
+            versao_playwright = "?"
+        try:
+            from main import VERSAO as versao_programa
+        except Exception:
+            versao_programa = "?"
+        try:
+            versao_chrome = context.browser.version
+        except Exception:
+            versao_chrome = "?"
+        _diag(
+            f"##### NOVA EXECUÇÃO · programa {versao_programa} · Playwright {versao_playwright} · "
+            f"Chrome {versao_chrome} · {platform.platform()} · PC {platform.node()} · CPUs {os.cpu_count()}"
+        )
+    except Exception:
+        pass
+
+
+def _diag_janela(aba_sei) -> None:
+    """Tamanho da janela do Chrome e da tela, zoom, foco e visibilidade da aba."""
+    try:
+        info = aba_sei.evaluate(
+            """() => ({
+                janela_externa: [outerWidth, outerHeight], area_da_pagina: [innerWidth, innerHeight],
+                tela: [screen.width, screen.height], zoom_dpr: devicePixelRatio,
+                aba_com_foco: document.hasFocus(), aba_visivel: document.visibilityState,
+            })"""
+        )
+        _diag(f"  janela: {info}")
+    except Exception as erro:
+        _diag(f"  (não consegui ler a janela: {type(erro).__name__}: {erro})")
+
+
+def _ouvir_salvar(aba_sei, context, inicio):
+    """
+    Liga "ouvintes" que só ANOTAM o que acontece depois do clique em Salvar:
+    pedidos e respostas do SEI (documento_gerar / editor_montar / POST),
+    navegação dos frames, janelas novas, erros de JavaScript. Retorna
+    (visto, ouvintes): `visto` conta o que apareceu (para a conclusão no log)
+    e `ouvintes` é entregue a _parar_de_ouvir() ao final.
+    """
+    visto = {"pedido": 0, "resposta": 0, "janela_nova": 0, "erro_js": 0, "popup_bloqueado": 0}
+
+    def hora() -> str:
+        return f"+{time.monotonic() - inicio:.1f}s"
+
+    def interessa(url: str) -> bool:
+        return "documento_gerar" in url or "editor_montar" in url
+
+    def seguro(funcao):
+        def envolvida(*args):
+            try:
+                funcao(*args)
+            except Exception:
+                pass
+        return envolvida
+
+    def ao_pedir(req):
+        if req.method != "GET" or interessa(req.url):
+            if req.method == "POST" and interessa(req.url):
+                visto["pedido"] += 1
+            _diag(f"  {hora()} pedido {req.method} {req.url[:150]}")
+
+    def ao_responder(resp):
+        req = resp.request
+        if req.method != "GET" or interessa(resp.url):
+            if req.method == "POST" and interessa(resp.url):
+                visto["resposta"] += 1
+            _diag(f"  {hora()} resposta {resp.status} {req.method} {resp.url[:150]}")
+
+    def ao_falhar(req):
+        _diag(f"  {hora()} pedido FALHOU {req.method} {req.url[:150]}: {req.failure}")
+
+    def ao_navegar(frame):
+        if frame.name in ("ifrVisualizacao", "ifrArvore", "ifrConteudoVisualizacao"):
+            _diag(f"  {hora()} frame {frame.name} foi para {frame.url[:150]}")
+
+    def ao_abrir_popup(pagina):
+        visto["janela_nova"] += 1
+        _diag(f"  {hora()} popup aberto: {pagina.url[:150]}")
+
+    def ao_nova_aba(pagina):
+        _diag(f"  {hora()} aba nova no navegador: {pagina.url[:150]}")
+
+    def ao_console(mensagem):
+        if mensagem.type in ("error", "warning"):
+            _diag(f"  {hora()} console {mensagem.type}: {mensagem.text[:200]}")
+
+    def ao_erro_js(erro):
+        visto["erro_js"] += 1
+        # O SEI faz janela = window.open(editor); janela.moveTo(...). Com o
+        # popup bloqueado, window.open devolve null e o moveTo estoura.
+        if "moveTo" in str(erro):
+            visto["popup_bloqueado"] += 1
+        _diag(f"  {hora()} ERRO de JavaScript na página: {str(erro)[:200]}")
+
+    ligacoes = [
+        (aba_sei, "request", ao_pedir), (aba_sei, "response", ao_responder),
+        (aba_sei, "requestfailed", ao_falhar), (aba_sei, "framenavigated", ao_navegar),
+        (aba_sei, "popup", ao_abrir_popup), (aba_sei, "console", ao_console),
+        (aba_sei, "pageerror", ao_erro_js), (context, "page", ao_nova_aba),
+    ]
+    ouvintes = []
+    for emissor, evento, funcao in ligacoes:
+        funcao = seguro(funcao)
+        try:
+            emissor.on(evento, funcao)
+            ouvintes.append((emissor, evento, funcao))
+        except Exception:
+            pass
+    return visto, ouvintes
+
+
+def _parar_de_ouvir(ouvintes) -> None:
+    for emissor, evento, funcao in ouvintes:
+        try:
+            emissor.remove_listener(evento, funcao)
+        except Exception:
+            pass
+
+
+def _diag_botao_salvar(aba_sei, frame_tipo) -> None:
+    """Estado dos frames e do(s) botão(ões) Salvar logo antes do clique."""
+    try:
+        _diag_janela(aba_sei)
+        _diag(f"formulário no frame name={frame_tipo.name!r} url={frame_tipo.url}")
+        for frame in aba_sei.frames:
+            try:
+                total = frame.evaluate("document.getElementsByTagName('*').length")
+            except PlaywrightError as erro:
+                total = f"erro: {erro}"
+            _diag(f"  frame name={frame.name!r} elementos={total} url={frame.url}")
+        botoes = frame_tipo.locator("#btnSalvar")
+        quantidade = botoes.count()
+        _diag(f"#btnSalvar no formulário: {quantidade}")
+        for i in range(min(quantidade, 3)):
+            botao = botoes.nth(i)
+            _diag(
+                f"  botão {i}: visível={botao.is_visible()} habilitado={botao.is_enabled()} "
+                f"estado={botao.evaluate(_JS_ESTADO_BOTAO)}"
+            )
+    except Exception as erro:  # diagnóstico nunca derruba a automação
+        _diag(f"  (não consegui ler o estado do botão: {type(erro).__name__}: {erro})")
+
+
+# ---- Plano B: o Chrome bloqueou o popup do editor ----
+#
+# O SEI cria o documento e tenta abrir o editor numa janela nova (popup).
+# Se o Chrome bloquear, o documento fica criado em branco e o Playwright
+# espera 30 s por uma janela que nunca vem. O endereço do editor, porém,
+# aparece nos frames do SEI (no script que tentou abrir o popup ou no link
+# "Editar Conteúdo"), e abrir esse endereço numa aba nossa não é popup.
+
+_PADRAO_EDITOR = re.compile(r"controlador\.php\?acao=editor_montar[^\"'\s<>)\\]*")
+
+
+def _editores_nos_frames(aba_sei) -> dict:
+    """{id_documento: endereço} de cada 'editor_montar' que aparece nos frames da aba."""
+    achados = {}
+    for frame in aba_sei.frames:
+        try:
+            html = frame.content()
+        except PlaywrightError:
+            continue
+        html = html.replace("\\u0026", "&").replace("\\/", "/").replace("&amp;", "&")
+        for trecho in _PADRAO_EDITOR.findall(html):
+            numero = re.search(r"[?&]id_documento=(\d+)", trecho)
+            if numero:
+                achados[numero.group(1)] = urljoin(frame.url, trecho)
+    return achados
+
+
+def _abrir_editor_do_documento_novo(context, aba_sei, antes):
+    """
+    Abre o editor do documento que o Salvar acabou de criar, sem depender
+    do popup. `antes` são os editores que já apareciam nos frames ANTES do
+    clique: só vale um endereço novo, e só se for um (nunca abre o editor
+    de um documento antigo). Retorna a Page do editor ou None.
+    """
+    if antes is None:
+        return None
+    try:
+        novos = {i: u for i, u in _editores_nos_frames(aba_sei).items() if i not in antes}
+    except Exception as erro:
+        _diag(f"plano B: não consegui ler os frames: {type(erro).__name__}: {erro}")
+        return None
+    _diag(f"plano B: editores novos nos frames = {sorted(novos)} (antes do Salvar: {sorted(antes)})")
+    if len(novos) != 1:
+        return None
+    return _reabrir_editor(context, next(iter(novos.values())))
+
+
+def _diag_falha_editor(context, aba_sei, frame_tipo, visto) -> None:
+    """Tudo o que ajuda a explicar por que o editor não abriu, mais uma conclusão em uma linha."""
+    try:
+        for aba in context.pages:
+            _diag(f"  aba aberta: {aba.url}")
+        # O SEI manda abrir o editor por um script na resposta do Salvar:
+        # se o endereço aparecer aqui, o popup foi pedido e bloqueado.
+        try:
+            achado = re.search(r"editor_montar[^\"'\s<]*", frame_tipo.content())
+            _diag(f"  editor_montar na resposta do Salvar: {achado.group(0)[:200] if achado else 'não achei'}")
+        except Exception as erro:
+            _diag(f"  (não consegui ler a resposta do Salvar: {type(erro).__name__}: {erro})")
+        try:
+            texto = frame_tipo.evaluate("document.body ? document.body.innerText.slice(0, 400) : ''")
+            _diag(f"  texto visível no formulário agora: {' '.join(texto.split())!r}")
+        except Exception as erro:
+            _diag(f"  (não consegui ler o texto do formulário: {type(erro).__name__})")
+        _diag_botao_salvar(aba_sei, frame_tipo)
+        try:
+            caminho = os.path.join(PASTA_BASE, time.strftime("falha_editor_%d-%m_%H-%M-%S.png"))
+            aba_sei.screenshot(path=caminho, timeout=5000)
+            _diag(f"  captura da tela salva em {caminho}")
+        except Exception as erro:
+            _diag(f"  (sem captura de tela: {type(erro).__name__})")
+    except Exception:
+        pass
+    if visto["pedido"] == 0:
+        conclusao = "o Salvar NÃO enviou o formulário ao SEI (o clique não teve efeito ou foi barrado por validação/JS)"
+    elif visto["resposta"] == 0:
+        conclusao = "o formulário foi enviado, mas o SEI NÃO respondeu a tempo (servidor lento ou travado)"
+    elif visto["janela_nova"] == 0:
+        conclusao = "o SEI respondeu ao Salvar, mas NENHUMA janela abriu (popup bloqueado pelo Chrome?)"
+    else:
+        conclusao = "uma janela abriu, mas não foi reconhecida como o editor"
+    _diag(f"  CONCLUSÃO: {conclusao} · erros de JS vistos: {visto['erro_js']}")
+
+
+# Quanto esperar pelo editor depois do Salvar, e quanto dar ao popup depois
+# que o documento já aparece criado no SEI antes de abrir pelo plano B.
+ESPERA_EDITOR_S = 30
+FOLGA_POPUP_S = 3
+
+
+def _esperar_editor(context, aba_sei, abas_novas, antes, visto, inicio):
+    """
+    Espera o editor depois do Salvar sem gastar os 30 s à toa: vale o popup
+    do SEI (primeira aba nova) ou, se o documento já foi criado e o popup
+    não veio -- o Chrome bloqueou (erro 'moveTo') ou passou FOLGA_POPUP_S --,
+    o plano B. Retorna a Page do editor ou None.
+    """
+    criado_em = None
+    tentou_plano_b = False
+    while time.monotonic() - inicio < ESPERA_EDITOR_S:
+        if abas_novas:
+            return abas_novas[0]
+        if antes is not None and not tentou_plano_b:
+            if criado_em is None:
+                try:
+                    if any(i not in antes for i in _editores_nos_frames(aba_sei)):
+                        criado_em = time.monotonic()
+                        _diag(f"  +{criado_em - inicio:.1f}s documento criado (editor dele já aparece no SEI)")
+                except Exception:
+                    pass
+            if criado_em is not None and (visto["popup_bloqueado"] or time.monotonic() - criado_em >= FOLGA_POPUP_S):
+                tentou_plano_b = True
+                motivo = "Chrome bloqueou o popup" if visto["popup_bloqueado"] else f"popup não veio em {FOLGA_POPUP_S}s"
+                _diag(f"  +{time.monotonic() - inicio:.1f}s plano B ({motivo})")
+                pagina = _abrir_editor_do_documento_novo(context, aba_sei, antes)
+                if pagina is not None:
+                    _diag(f"plano B: editor aberto direto: {pagina.url}")
+                    _diag(f"  eventos vistos até aqui: {visto}")
+                    print("O Chrome não abriu a janela do editor; abri o editor do documento criado por outro caminho.")
+                    return pagina
+                abas_novas.clear()  # a aba que o próprio plano B abriu e fechou
+        aba_sei.wait_for_timeout(1000)  # deixa os eventos do navegador chegarem
+    if abas_novas:
+        return abas_novas[0]
+    if antes is not None and not tentou_plano_b:
+        pagina = _abrir_editor_do_documento_novo(context, aba_sei, antes)
+        if pagina is not None:
+            _diag(f"plano B (no fim da espera): editor aberto direto: {pagina.url}")
+            print("O Chrome não abriu a janela do editor; abri o editor do documento criado por outro caminho.")
+        return pagina
+    return None
+
+
 def _incluir_e_editar_documento(
     context, aba_sei, texto_link: str, rotulo: str, numero_pp: str = None, antes_de_criar=None
 ):
     """
-    _incluir_documento() + clica em "Salvar" (dentro do
-    context.expect_page() que captura a nova aba do editor). O SEI
+    _incluir_documento() + clica em "Salvar" e espera a nova aba do
+    editor (_esperar_editor: popup do SEI ou plano B). O SEI
     duplica o botão #btnSalvar (mesmo id nas barras de comando de cima
     e de baixo) -- `.first` evita "strict mode violation".
 
@@ -1373,26 +1699,64 @@ def _incluir_e_editar_documento(
 
     Retorna a Page do editor de texto do documento recém-criado.
     """
-    frame_tipo = _incluir_documento(aba_sei, texto_link, rotulo, numero_pp=numero_pp)
+    _diag_ambiente(context)
+    _diag(f"=== '{texto_link}' · diagnóstico v3 · aba SEI: {aba_sei.url}")
+    try:
+        frame_tipo = _incluir_documento(aba_sei, texto_link, rotulo, numero_pp=numero_pp)
+    except BaseException as erro:
+        _diag(f"FALHOU ANTES do Salvar (preencher o formulário): {type(erro).__name__}: {erro}")
+        raise
 
     if antes_de_criar is not None:
         antes_de_criar()
 
-    with context.expect_page() as pagina_editor_info:
-        botao_salvar = frame_tipo.locator("#btnSalvar").first
-        try:
-            botao_salvar.click(timeout=10000)
-        except PlaywrightError:
-            # Árvore de processo gigante: o clique do Playwright falha nas
-            # checagens de visibilidade/estabilidade da página pesada, mas o
-            # clique manual funciona. Dispara o mesmo clique direto no DOM
-            # (executa o onclick="confirmarDados()" do botão).
-            print("Clique em 'Salvar' falhou; repetindo direto no DOM (árvore grande).")
-            botao_salvar.evaluate("el => el.click()")
+    _diag_botao_salvar(aba_sei, frame_tipo)
+    try:
+        antes = set(_editores_nos_frames(aba_sei))
+    except Exception:
+        antes = None  # sem esta fotografia o plano B não roda (evita abrir documento antigo)
+    inicio = time.monotonic()
+    visto, ouvintes = _ouvir_salvar(aba_sei, context, inicio)
+    abas_novas = []
 
-    pagina_editor = pagina_editor_info.value
+    def _ao_abrir_aba(pagina):
+        abas_novas.append(pagina)
+
+    try:
+        context.on("page", _ao_abrir_aba)
+        ouvintes.append((context, "page", _ao_abrir_aba))
+        try:
+            botao_salvar = frame_tipo.locator("#btnSalvar").first
+            try:
+                botao_salvar.click(timeout=10000)
+                _diag(f"clique normal OK em {time.monotonic() - inicio:.1f}s")
+            except PlaywrightError as erro:
+                # Árvore de processo gigante: o clique do Playwright pode falhar
+                # nas checagens de visibilidade/estabilidade da página pesada,
+                # mas o clique manual funciona. Repete direto no DOM (executa o
+                # onclick="confirmarDados()" do botão).
+                _diag(f"clique normal FALHOU em {time.monotonic() - inicio:.1f}s: {type(erro).__name__}: {erro}")
+                print(f"Clique em 'Salvar' falhou; repetindo direto no DOM. Detalhes em {ARQUIVO_DIAGNOSTICO}")
+                try:
+                    botao_salvar.evaluate("el => el.click()")
+                except PlaywrightError as erro_dom:
+                    _diag(f"clique direto no DOM FALHOU: {type(erro_dom).__name__}: {erro_dom}")
+                    raise
+                _diag("clique direto no DOM executado")
+            pagina_editor = _esperar_editor(context, aba_sei, abas_novas, antes, visto, inicio)
+            if pagina_editor is None:
+                raise PlaywrightTimeoutError(f"o editor do documento não abriu em {ESPERA_EDITOR_S}s depois do Salvar")
+        except BaseException as erro:  # inclui Ctrl+C e SystemExit: o log precisa mostrar por que parou
+            _diag(f"EDITOR NÃO ABRIU após {time.monotonic() - inicio:.1f}s: {type(erro).__name__}: {erro}")
+            _diag_falha_editor(context, aba_sei, frame_tipo, visto)
+            print(f"O editor não abriu depois do Salvar. Detalhes em {ARQUIVO_DIAGNOSTICO}")
+            raise
+    finally:
+        _parar_de_ouvir(ouvintes)
+
     _aguardar_rede(pagina_editor)
 
+    _diag(f"editor aberto em {time.monotonic() - inicio:.1f}s: {pagina_editor.url}")
     print(f"Editor do documento '{texto_link}' aberto: {pagina_editor.url}")
     return pagina_editor
 
