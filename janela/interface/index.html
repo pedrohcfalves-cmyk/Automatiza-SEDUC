@@ -6,11 +6,23 @@
 <title>Central de Automações</title>
 <link rel="stylesheet" href="estilo.css">
 <link rel="stylesheet" href="dare.css">
+<link rel="stylesheet" href="modulos2.css">
+<script>
+  // Acessibilidade (central.js) aplicada antes de desenhar, para a tela não piscar no tamanho errado.
+  try {
+    var acess = JSON.parse(localStorage.getItem("central-acessibilidade") || "{}");
+    if (acess.tamanho && acess.tamanho !== 1) {
+      document.documentElement.style.zoom = String(acess.tamanho);
+      document.documentElement.style.setProperty("--acess-zoom", String(acess.tamanho));
+    }
+    ["contraste", "foco", "movimento", "espaco"].forEach(function (k) { if (acess[k]) document.documentElement.setAttribute("data-acess-" + k, ""); });
+  } catch (e) { /* sem armazenamento: padrão */ }
+</script>
 </head>
 <body>
 
 <!-- Ícones usados na página (referenciados com <use href="#i-...">) -->
-<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
   <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.2 4.2L19 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
   <symbol id="i-seta" viewBox="0 0 24 24"><path d="M4 12h15M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -23,41 +35,77 @@
   <symbol id="i-banco" viewBox="0 0 24 24"><path d="M3 9.5L12 4l9 5.5M5 10v7M9.5 10v7M14.5 10v7M19 10v7M3.5 20h17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-parar" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="1.5" fill="currentColor"/></symbol>
   <symbol id="i-dare" viewBox="0 0 24 24"><path d="M6 3h12v18l-2.2-1.4L13.6 21l-1.6-1.4L10.4 21l-2.2-1.4L6 21z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 8h6M9 11.5h6M9 15h3.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+  <symbol id="i-empenho" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 3v4h4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 13.5l2 2 4-4.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-credor" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.6" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M2.8 20c.6-3.6 3.1-5.6 6.2-5.6s5.6 2 6.2 5.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M15 9.5h6M18 6.5v6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+  <symbol id="i-anexar" viewBox="0 0 24 24"><path d="M15.5 6.5l-6.4 6.4a2 2 0 002.8 2.8l7-7a3.6 3.6 0 00-5.1-5.1l-7.2 7.2a5.2 5.2 0 007.4 7.4l6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-grafico" viewBox="0 0 24 24"><path d="M4 20h16M7 16.5v-5M12 16.5V6.5M17 16.5v-8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-acess" viewBox="0 0 24 24"><circle cx="12" cy="4.6" r="1.9" fill="currentColor"/><path d="M5 8.4l7 1.6 7-1.6M12 10v4.2M12 14.2l-3.2 6M12 14.2l3.2 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-registro" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
 </svg>
 
+<a class="pular" href="#conteudo">Pular para o conteúdo</a>
+
 <div class="app">
 
-  <!-- ============================== Barra lateral ============================== -->
-  <aside class="lateral">
+  <!-- ============== Barra lateral: marca, automações e o que vale para todas ============== -->
+  <aside class="lateral" aria-label="Automações e menu">
     <div class="marca">
-      <div class="logo" aria-hidden="true">
-        <svg viewBox="0 0 48 48">
-          <rect x="4" y="9" width="15" height="20" rx="2.5" fill="#fff" opacity=".95"/>
-          <rect x="29" y="19" width="15" height="20" rx="2.5" fill="#fff" opacity=".95"/>
-          <path d="M16 36c6 4 14 3 18-2" fill="none" stroke="#3DDC97" stroke-width="3.2" stroke-linecap="round"/>
-          <path d="M30.5 30.5l3.9 3.4-4.4 2.8" fill="none" stroke="#3DDC97" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
+        <div class="logo" aria-hidden="true">
+          <svg viewBox="0 0 48 48">
+            <rect x="4" y="9" width="15" height="20" rx="2.5" fill="#fff" opacity=".95"/>
+            <rect x="29" y="19" width="15" height="20" rx="2.5" fill="#fff" opacity=".95"/>
+            <path d="M16 36c6 4 14 3 18-2" fill="none" stroke="#3DDC97" stroke-width="3.2" stroke-linecap="round"/>
+            <path d="M30.5 30.5l3.9 3.4-4.4 2.8" fill="none" stroke="#3DDC97" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div>
+          <div class="marca-nome">Central de Automações</div>
+          <div class="marca-sub">SEDUC · SIGEF · SEI · Banco do Brasil</div>
+        </div>
       </div>
-      <div>
-        <div class="marca-nome">Central de Automações</div>
-        <div class="marca-sub">SIGEF · SEI · DARE · Banco do Brasil</div>
-      </div>
-    </div>
 
-    <nav class="modulos" id="modulos" aria-label="Módulos">
+    <nav class="modulos" id="modulos" aria-label="Automações">
       <button class="modulo ativo" type="button" data-modulo="sei" aria-current="page">
-        <svg class="ic"><use href="#i-doc"/></svg><span><b>Anexar no SEI</b><small>Baixa do SIGEF e inclui no processo</small></span>
+        <svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg><span><b>Anexar no SEI</b><small>CE, NL, PP e OB a partir da OB</small></span>
+      </button>
+      <button class="modulo" type="button" data-modulo="ne">
+        <svg class="ic" aria-hidden="true"><use href="#i-empenho"/></svg><span><b>Nota de Empenho</b><small>Imprime a NE e anexa no SEI</small></span>
       </button>
       <button class="modulo" type="button" data-modulo="dare">
-        <svg class="ic"><use href="#i-dare"/></svg><span><b>DARE</b><small>DARE avulso → PDF → SEI</small></span>
+        <svg class="ic" aria-hidden="true"><use href="#i-dare"/></svg><span><b>DARE</b><small>DARE avulso → PDF → SEI</small></span>
+      </button>
+      <button class="modulo" type="button" data-modulo="anexar">
+        <svg class="ic" aria-hidden="true"><use href="#i-anexar"/></svg><span><b>Gerar pagamento</b><small>Faz CE, NL, PP e OB e anexa</small></span>
+      </button>
+      <button class="modulo" type="button" data-modulo="cadastro">
+        <svg class="ic" aria-hidden="true"><use href="#i-credor"/></svg><span><b>Cadastro de Credores</b><small>Credor e conta no SIGEF</small></span>
       </button>
       <button class="modulo" type="button" data-modulo="bb">
-        <svg class="ic"><use href="#i-banco"/></svg><span><b>Banco do Brasil</b><small>Cargas de cartão</small></span>
+        <svg class="ic" aria-hidden="true"><use href="#i-banco"/></svg><span><b>Banco do Brasil</b><small>Cargas de cartão</small></span>
       </button>
     </nav>
 
-    <ol class="passos" id="passos">
+    <div class="lateral-rodape">
+        <button class="link-lateral" id="btn-relatorio-geral" type="button" aria-haspopup="dialog"
+                title="Todas as automações num relatório só: tempo economizado, por mês, por pessoa e o detalhe de cada uma">
+          <svg class="ic" aria-hidden="true"><use href="#i-grafico"/></svg><span><b>Relatório geral</b><small>Todas as automações</small></span>
+        </button>
+        <button class="link-lateral" id="btn-pasta-lateral" type="button" title="Abrir a pasta dos documentos baixados">
+          <svg class="ic" aria-hidden="true"><use href="#i-pasta"/></svg><span><b>Pasta dos documentos</b><small>PDFs baixados</small></span>
+        </button>
+      <div class="contador" id="contador" role="status" hidden>
+        <strong id="contador-num">0</strong>
+        <span>concluído(s) nesta sessão</span>
+      </div>
+      <div class="versao" id="ne-versao-lateral" hidden>automação NE versão <span data-ne-versao>—</span></div>
+      <div class="versao" id="versao">versão —</div>
+    </div>
+  </aside>
+
+  <!-- ============== Topo: os passos da automação aberta (no meio), o ano e a acessibilidade ============== -->
+  <header class="topo-app">
+    <div class="topo-passos">
+    <ol class="passos" id="passos" aria-label="Etapas do Anexar no SEI">
       <li data-passo="inicio"><span class="bolha">1</span><span>Início</span></li>
       <li data-passo="login"><span class="bolha">2</span><span>Entrar nos sistemas</span></li>
       <li data-passo="dados"><span class="bolha">3</span><span>Processo e OB</span></li>
@@ -65,35 +113,60 @@
       <li data-passo="conferencia"><span class="bolha">5</span><span>Conferência</span></li>
     </ol>
 
-    <!-- Páginas do DARE: a barra lateral do aplicativo DARE, quando o módulo está aberto -->
-    <nav class="dare-nav" id="dare-nav" aria-label="Páginas do DARE" hidden>
-      <button type="button" data-dare-ir="inicio"><span class="ico">⌂</span><span class="txt">Início</span></button>
-      <button type="button" data-dare-ir="lancamentos"><span class="ico">☰</span><span class="txt">Lançamentos</span><span class="dare-badge" id="dare-badge-lista" hidden></span></button>
-      <button type="button" data-dare-ir="execucao"><span class="ico">▶</span><span class="txt">Execução</span><span class="dare-badge verde" id="dare-badge-exec" hidden>em andamento</span></button>
-      <button type="button" data-dare-ir="arquivos"><span class="ico">▤</span><span class="txt">Arquivos PDF</span></button>
-      <button type="button" data-dare-ir="desempenho"><span class="ico">◔</span><span class="txt">Desempenho</span></button>
-      <button type="button" data-dare-ir="configuracoes"><span class="ico">⚙</span><span class="txt">Configurações</span></button>
+    <!-- Passos da Nota de Empenho (ne.js): só com o módulo NE aberto -->
+    <ol class="passos" id="ne-passos" aria-label="Etapas da Nota de Empenho" hidden>
+      <li data-ne-passo="inicio"><span class="bolha">1</span><span>Início</span></li>
+      <li data-ne-passo="login"><span class="bolha">2</span><span>Entrar nos sistemas</span></li>
+      <li data-ne-passo="dados"><span class="bolha">3</span><span>Processo e NE</span></li>
+      <li data-ne-passo="execucao"><span class="bolha">4</span><span>Baixar e anexar</span></li>
+      <li data-ne-passo="conferencia"><span class="bolha">5</span><span>Conferência</span></li>
+    </ol>
+
+    <!-- Passos do Cadastro de Credores (cadastro.js): a trilha da janela original -->
+    <ol class="passos" id="cad-passos" aria-label="Etapas do Cadastro de Credores" hidden>
+      <li><span class="bolha">1</span><span>Entrar no SIGEF</span></li>
+      <li><span class="bolha">2</span><span>Escolher os dados</span></li>
+      <li><span class="bolha">3</span><span>Cadastrar</span></li>
+      <li><span class="bolha">4</span><span>Ver o resultado</span></li>
+    </ol>
+
+    <!-- Páginas do Gerar pagamento (anexar.js): o menu da janela original -->
+    <nav class="dare-nav" id="anx-nav" aria-label="Páginas do Gerar pagamento" hidden>
+      <button type="button" data-anx-ir="inicio"><span class="ico" aria-hidden="true">⌂</span><span class="txt">Início</span></button>
+      <button type="button" data-anx-ir="processo"><span class="ico" aria-hidden="true">▶</span><span class="txt">Fazer um processo</span><span class="dare-badge verde" id="anx-selo-vez" hidden>Sua vez</span></button>
+      <button type="button" data-anx-ir="configuracoes"><span class="ico" aria-hidden="true">⚙</span><span class="txt">Configurações</span></button>
+      <button type="button" data-anx-ir="estatisticas"><span class="ico" aria-hidden="true">◔</span><span class="txt">Tempos e planilhas</span></button>
+      <button type="button" data-anx-ir="ajuda"><span class="ico" aria-hidden="true">?</span><span class="txt">Ajuda e licença</span></button>
+      <label class="anx-treino" title="Treinar sem mexer no SEI nem no SIGEF"><input type="checkbox" id="anx-treino"> Modo treino</label>
+      <p class="anx-situacao" id="anx-situacao" role="status" hidden>Nenhuma automação rodando</p>
     </nav>
 
-    <div class="lateral-rodape">
-      <div class="contador" id="contador" hidden>
-        <strong id="contador-num">0</strong>
-        <span>processo(s) concluído(s) nesta sessão</span>
-      </div>
-      <button class="link-pasta" id="btn-relatorio-lateral" type="button" title="Indicadores de OBs, documentos e tempo, para apresentar">
-        <svg class="ic"><use href="#i-planilha"/></svg>
-        <span>Relatório gerencial</span>
-      </button>
-      <button class="link-pasta" id="btn-pasta-lateral" type="button" title="Abrir a pasta dos documentos baixados">
-        <svg class="ic"><use href="#i-pasta"/></svg>
-        <span>Pasta dos documentos</span>
-      </button>
-      <div class="versao" id="versao">versão —</div>
+    <!-- Páginas do DARE: o menu do aplicativo DARE, quando o módulo está aberto -->
+    <nav class="dare-nav" id="dare-nav" aria-label="Páginas do DARE" hidden>
+      <button type="button" data-dare-ir="inicio"><span class="ico" aria-hidden="true">⌂</span><span class="txt">Início</span></button>
+      <button type="button" data-dare-ir="lancamentos"><span class="ico" aria-hidden="true">☰</span><span class="txt">Lançamentos</span><span class="dare-badge" id="dare-badge-lista" hidden></span></button>
+      <button type="button" data-dare-ir="execucao"><span class="ico" aria-hidden="true">▶</span><span class="txt">Execução</span><span class="dare-badge verde" id="dare-badge-exec" hidden>em andamento</span></button>
+      <button type="button" data-dare-ir="arquivos"><span class="ico" aria-hidden="true">▤</span><span class="txt">Arquivos PDF</span></button>
+      <button type="button" data-dare-ir="desempenho"><span class="ico" aria-hidden="true">◔</span><span class="txt">Diagnóstico</span></button>
+      <button type="button" data-dare-ir="configuracoes"><span class="ico" aria-hidden="true">⚙</span><span class="txt">Configurações</span></button>
+    </nav>
+
     </div>
-  </aside>
+    <div class="menu-geral" aria-label="Para todas as automações" role="group">
+        <div class="ano-sigef" title="Exercício do SIGEF usado pela OB e pela NE. Padrão: o ano atual.">
+          <label for="ano-sigef">Ano do SIGEF</label>
+          <select id="ano-sigef"></select>
+          <small id="ano-sigef-aviso" role="status"></small>
+        </div>
+        <button class="menu-btn" id="btn-acessibilidade" type="button" aria-haspopup="dialog" aria-controls="acess-modal"
+                title="Tamanho do texto, contraste e animações para o aplicativo inteiro (atalhos: Ctrl + e Ctrl −)">
+          <svg class="ic" aria-hidden="true"><use href="#i-acess"/></svg><span>Acessibilidade</span>
+        </button>
+    </div>
+  </header>
 
   <!-- ============================== Conteúdo ============================== -->
-  <main class="conteudo">
+  <main class="conteudo" id="conteudo" tabindex="-1">
 
     <!-- ---------- 1. Início ---------- -->
     <section class="tela" id="tela-inicio">
@@ -229,6 +302,23 @@
           </div>
         </div>
 
+        <fieldset class="campo campo-modo-ce">
+          <legend>Como listar e imprimir a CE</legend>
+          <div class="opcoes-tipo">
+            <label class="opcao">
+              <input type="radio" name="modo-ce" value="pp" checked>
+              <span class="radio"></span>
+              <span class="texto"><b>Imprimir Despesa Certificada Normal</b><small>O caminho de sempre</small></span>
+            </label>
+            <label class="opcao">
+              <input type="radio" name="modo-ce" value="impressao">
+              <span class="radio"></span>
+              <span class="texto"><b>Imprimir Despesa Certificada Situação</b><small>Anota as CEs da OB e imprime cada uma por lá</small></span>
+            </label>
+          </div>
+          <div class="dica">Só vale com a CE marcada. Se a impressão de uma CE falhar, ela é pulada e aparece na conferência. O programa lembra a última escolha.</div>
+        </fieldset>
+
         <fieldset class="campo" id="campo-tipo">
           <legend>Como a OB entra no SEI</legend>
           <div class="opcoes-tipo">
@@ -265,6 +355,23 @@
           <textarea id="in-lista" rows="6" spellcheck="false" placeholder="0029.001947/2026-67    2026OB136475    Regularização&#10;0029.001948/2026-11    136476          Ordem Bancária"></textarea>
           <div class="dica">Uma OB por linha: o processo, a OB e, se quiser, o tipo (<code>Regularização</code> ou <code>Ordem Bancária</code>). Pode colar direto do Excel; a ordem das colunas e o cabeçalho não importam.</div>
         </div>
+
+        <fieldset class="campo campo-modo-ce">
+          <legend>Como listar e imprimir a CE</legend>
+          <div class="opcoes-tipo">
+            <label class="opcao">
+              <input type="radio" name="modo-ce-lote" value="pp" checked>
+              <span class="radio"></span>
+              <span class="texto"><b>Imprimir Despesa Certificada Normal</b><small>O caminho de sempre</small></span>
+            </label>
+            <label class="opcao">
+              <input type="radio" name="modo-ce-lote" value="impressao">
+              <span class="radio"></span>
+              <span class="texto"><b>Imprimir Despesa Certificada Situação</b><small>Anota as CEs da OB e imprime cada uma por lá</small></span>
+            </label>
+          </div>
+          <div class="dica">Só vale com a CE marcada. Se a impressão de uma CE falhar, ela é pulada e aparece na conferência. O programa lembra a última escolha.</div>
+        </fieldset>
 
         <fieldset class="campo" id="campo-tipo-lote">
           <legend>Tipo da OB nas linhas que não dizem o tipo</legend>
@@ -443,6 +550,252 @@
         </div>
         <p class="nota">Ao encerrar, o Chrome da automação continua aberto — feche quando quiser.</p>
       </div>
+    </section>
+
+    <!-- ---------- Módulo: Nota de Empenho (ne.js) ---------- -->
+    <section class="tela" id="tela-ne" hidden>
+
+      <!-- 1. Início e navegador -->
+      <div class="ne-passo" id="ne-p-inicio">
+        <header class="cabeca">
+          <p class="sobre">Nota de Empenho · passo 1 de 5 · automação NE versão <span data-ne-versao>—</span></p>
+          <h1>Baixe a Nota de Empenho do SIGEF e anexe no SEI</h1>
+          <p class="lead">Informe o processo e a NE. O programa imprime a Nota de Empenho no SIGEF, transforma cada página em imagem e inclui no processo do SEI como “<span data-ne-tipo>NE - Nota de Empenho</span>”.</p>
+        </header>
+        <div class="grade2">
+          <div class="cartao">
+            <h3><svg class="ic ok"><use href="#i-check"/></svg>O que o programa faz</h3>
+            <ul class="lista">
+              <li><b>Imprime</b> a NE no SIGEF (tela “Imprimir Nota de Empenho”)</li>
+              <li><b>Baixa</b> as páginas em imagem, numa pasta com o número do processo</li>
+              <li><b>Anexa</b> no SEI com nível de acesso Restrito e hipótese legal “Documento Preparatório”</li>
+            </ul>
+          </div>
+          <div class="cartao">
+            <h3><svg class="ic nao"><use href="#i-x"/></svg>O que ele não faz</h3>
+            <ul class="lista">
+              <li><b>Não gera, não altera e não exclui</b> nada no SIGEF</li>
+              <li>A NE precisa <b>já existir</b> no SIGEF, no exercício <b data-ne-ano>2026</b></li>
+            </ul>
+          </div>
+        </div>
+        <div class="acao">
+          <button class="btn primario grande" id="ne-btn-comecar" type="button"><svg class="ic"><use href="#i-chrome"/></svg>Abrir o navegador da automação</button>
+          <p class="nota">É o mesmo Chrome da automação da OB: se você já entrou no SIGEF e no SEI por lá, o login continua valendo.</p>
+        </div>
+      </div>
+
+      <!-- 2. Login -->
+      <div class="ne-passo" id="ne-p-login" hidden>
+        <header class="cabeca">
+          <p class="sobre">Nota de Empenho · passo 2 de 5</p>
+          <h1>Entre no SIGEF e no SEI</h1>
+          <p class="lead">No Chrome da automação, faça o login no SIGEF e no SEI (se ainda não entrou) e confirme abaixo.</p>
+        </header>
+        <div class="carregando" id="ne-login-carregando">
+          <div class="giro" aria-hidden="true"></div>
+          <div><strong>Abrindo o navegador da automação…</strong><span id="ne-login-status">Isso leva alguns segundos.</span></div>
+        </div>
+        <div class="erro" id="ne-login-erro" hidden>
+          <div class="erro-cab"><svg class="ic"><use href="#i-alerta"/></svg><strong>Não consegui abrir o navegador</strong></div>
+          <pre id="ne-login-erro-msg"></pre>
+          <button class="btn primario" type="button" id="ne-btn-reconectar">Tentar de novo</button>
+        </div>
+        <div id="ne-login-pronto" hidden>
+          <div class="checagem">
+            <label class="item"><input type="checkbox" class="ne-chk-login"><span class="caixa"><svg class="ic"><use href="#i-check"/></svg></span><span class="texto"><b>Entrei no SIGEF</b><small>Na aba do SIGEF, com meu usuário e senha.</small></span></label>
+            <label class="item"><input type="checkbox" class="ne-chk-login"><span class="caixa"><svg class="ic"><use href="#i-check"/></svg></span><span class="texto"><b>Entrei no SEI</b><small>Na aba do SEI.</small></span></label>
+            <label class="item destaque"><input type="checkbox" class="ne-chk-login"><span class="caixa"><svg class="ic"><use href="#i-check"/></svg></span><span class="texto"><b>Conferi a minha gerência no SEI</b><small>Os documentos entram na gerência que estiver selecionada.</small></span></label>
+          </div>
+          <div class="acao linha">
+            <button class="btn primario grande" id="ne-btn-login-ok" type="button" disabled>Continuar <svg class="ic"><use href="#i-seta"/></svg></button>
+            <button class="btn fantasma" id="ne-btn-reabrir" type="button">Não vejo o navegador — abrir de novo</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Dados -->
+      <div class="ne-passo" id="ne-p-dados" hidden>
+        <header class="cabeca">
+          <p class="sobre" id="ne-dados-sobre">Nota de Empenho · passo 3 de 5</p>
+          <h1 id="ne-dados-titulo">Informe o processo e a Nota de Empenho</h1>
+          <p class="lead">A pontuação é opcional: digite só os números, se preferir, que o programa formata.</p>
+        </header>
+        <div class="abas" role="tablist">
+          <button class="aba ativa" type="button" role="tab" id="ne-aba-um" aria-selected="true">Uma NE</button>
+          <button class="aba" type="button" role="tab" id="ne-aba-lote" aria-selected="false"><svg class="ic"><use href="#i-planilha"/></svg>Várias NEs <span class="aba-sub">planilha ou lista</span></button>
+        </div>
+
+        <form class="formulario" id="ne-form" autocomplete="off" novalidate>
+          <div class="campo" id="ne-campo-processo">
+            <label for="ne-in-processo">Número do processo no SEI</label>
+            <input id="ne-in-processo" inputmode="numeric" placeholder="0029.001947/2026-67" spellcheck="false">
+            <div class="dica"><span id="ne-dica-processo">Onde anexar a NE. Exemplo: <code>0029.001947/2026-67</code> ou <code>0029001947202667</code></span></div>
+          </div>
+          <div class="campo" id="ne-campo-ne">
+            <label for="ne-in-ne">Número da Nota de Empenho (NE)</label>
+            <input id="ne-in-ne" placeholder="2026NE000123" spellcheck="false">
+            <div class="dica"><span id="ne-dica-ne">Exemplo: <code>2026NE000123</code> ou só <code>123</code></span></div>
+          </div>
+          <div class="campo" id="ne-campo-arvore">
+            <label for="ne-in-arvore">Nome na árvore do processo (opcional)</label>
+            <input id="ne-in-arvore" maxlength="50" placeholder="Ex.: Empenho do contrato 12/2026" spellcheck="false">
+            <div class="dica">Vai no campo “Nome na Árvore” do SEI, ao lado de “NE - Nota de Empenho”. Em branco, o campo fica vazio. Até 50 caracteres.</div>
+          </div>
+          <div class="acao linha">
+            <button class="btn primario grande" id="ne-btn-processar" type="submit">Baixar e anexar <svg class="ic"><use href="#i-seta"/></svg></button>
+            <button class="btn fantasma" id="ne-btn-relatorio" type="button" data-relatorio-geral><svg class="ic" aria-hidden="true"><use href="#i-grafico"/></svg>Relatório geral</button>
+          </div>
+        </form>
+
+        <div class="formulario" id="ne-form-lote" hidden>
+          <div class="lote-fonte">
+            <button class="btn fantasma" id="ne-btn-planilha" type="button"><svg class="ic"><use href="#i-planilha"/></svg>Escolher planilha (.xlsx ou .csv)</button>
+            <span class="lote-arquivo" id="ne-lote-arquivo"></span>
+          </div>
+          <div class="campo">
+            <label for="ne-in-lista">…ou cole a lista aqui</label>
+            <textarea id="ne-in-lista" rows="6" spellcheck="false" placeholder="0029.001947/2026-67    2026NE000123&#10;0029.001948/2026-11    000124"></textarea>
+            <div class="dica">Uma NE por linha: o processo e a NE (<code>2026NE000123</code>, ou só o número com os zeros: <code>000123</code>). Numa planilha com a coluna “NE”, vale o número sem zeros. A ordem das colunas não importa.</div>
+          </div>
+          <div class="previa" id="ne-lote-previa" hidden>
+            <div class="previa-cab"><h3><svg class="ic"><use href="#i-doc"/></svg>Conferência da lista</h3><span class="nota" id="ne-lote-contagem"></span></div>
+            <div class="previa-rolagem">
+              <table>
+                <thead><tr><th>Linha</th><th>Processo</th><th>NE</th><th>Situação</th></tr></thead>
+                <tbody id="ne-lote-linhas"></tbody>
+              </table>
+            </div>
+          </div>
+          <p class="erro-leitura" id="ne-lote-erro-leitura" hidden></p>
+          <div class="acao linha">
+            <button class="btn primario grande" id="ne-btn-lote" type="button" disabled><span id="ne-btn-lote-txt">Processar a lista</span> <svg class="ic"><use href="#i-seta"/></svg></button>
+            <span class="nota">Uma NE depois da outra, sem parar. A conferência é uma só, no fim.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. Execução -->
+      <div class="ne-passo" id="ne-p-execucao" hidden>
+        <header class="cabeca">
+          <p class="sobre" id="ne-exec-sobre">Nota de Empenho · passo 4 de 5</p>
+          <h1>Trabalhando no processo <span class="mono" id="ne-exec-processo">—</span></h1>
+          <p class="lead">NE <span class="mono" id="ne-exec-ne">—</span>, que entra no SEI como <b data-ne-tipo>NE - Nota de Empenho</b>. Deixe o Chrome da automação aberto e evite clicar nele até o fim.</p>
+        </header>
+        <div class="fases">
+          <div class="fase" data-ne-fase="sigef"><div class="fase-ic"><span class="num">1</span><svg class="ic"><use href="#i-check"/></svg></div><div class="fase-txt"><b>Baixar do SIGEF</b><small id="ne-fase-sigef-det">Aguardando</small></div></div>
+          <div class="fase-linha"></div>
+          <div class="fase" data-ne-fase="sei"><div class="fase-ic"><span class="num">2</span><svg class="ic"><use href="#i-check"/></svg></div><div class="fase-txt"><b>Anexar no SEI</b><small id="ne-fase-sei-det">Aguardando</small></div></div>
+          <div class="fase-linha"></div>
+          <div class="fase" data-ne-fase="conf"><div class="fase-ic"><span class="num">3</span><svg class="ic"><use href="#i-check"/></svg></div><div class="fase-txt"><b>Conferir</b><small id="ne-fase-conf-det">Com você</small></div></div>
+        </div>
+        <div class="barra" aria-hidden="true"><div class="barra-cheia" id="ne-barra"></div></div>
+        <div class="agora-linha">
+          <p class="agora" id="ne-agora">Preparando…</p>
+          <span class="relogio" id="ne-relogio" title="Tempo da automação nesta NE (a conferência não conta)">⏱ <b id="ne-relogio-txt">0:00</b></span>
+        </div>
+        <div class="erro" id="ne-erro" hidden>
+          <div class="erro-cab"><svg class="ic"><use href="#i-alerta"/></svg><strong>A automação parou</strong></div>
+          <pre id="ne-erro-msg"></pre>
+          <p class="retomar-nota" id="ne-erro-retomar"></p>
+          <div class="acao linha">
+            <button class="btn primario" id="ne-btn-erro-continuar" type="button">Continuar de onde parou <svg class="ic"><use href="#i-seta"/></svg></button>
+            <button class="btn fantasma" id="ne-btn-erro-voltar" type="button"><svg class="ic"><use href="#i-voltar"/></svg>Corrigir os números</button>
+            <button class="btn fantasma" id="ne-btn-erro-pasta" type="button"><svg class="ic"><use href="#i-pasta"/></svg>Abrir pasta</button>
+          </div>
+        </div>
+        <div class="resumo" id="ne-resumo" hidden></div>
+        <div class="lote-andamento" id="ne-lote-andamento" hidden>
+          <div class="previa-cab">
+            <h3><svg class="ic"><use href="#i-planilha"/></svg>Lote <span id="ne-lote-and-cont"></span></h3>
+            <button class="btn fantasma pequeno" id="ne-btn-parar-lote" type="button">Parar depois desta NE</button>
+          </div>
+          <ol class="lote-itens" id="ne-lote-itens"></ol>
+        </div>
+      </div>
+
+      <!-- Conferência (uma NE) -->
+      <div class="ne-passo" id="ne-p-conferencia" hidden>
+        <header class="cabeca">
+          <p class="sobre">Nota de Empenho · passo 5 de 5</p>
+          <h1>Confira a NE no SEI</h1>
+          <p class="lead">A NE foi incluída no processo <span class="mono" id="ne-conf-processo">—</span>. Antes de salvar, ordenar ou assinar, confira na tela do SEI:</p>
+        </header>
+        <div class="alerta-grande">
+          <svg class="ic"><use href="#i-alerta"/></svg>
+          <div><strong>Conferência obrigatória</strong><p>Esta automação apenas transporta para o SEI o documento obtido no SIGEF. A conferência, a ordenação e a assinatura são de responsabilidade exclusiva de quem opera.</p></div>
+        </div>
+        <div class="pendencias" id="ne-conf-avisos" hidden><strong>Atenção — resolva antes de assinar:</strong><ul id="ne-conf-avisos-lista"></ul></div>
+        <div class="checagem">
+          <label class="item"><input type="checkbox" class="ne-chk-conf"><span class="caixa"><svg class="ic"><use href="#i-check"/></svg></span><span class="texto"><b>A NE certa foi incluída, com todas as páginas</b></span></label>
+          <label class="item"><input type="checkbox" class="ne-chk-conf"><span class="caixa"><svg class="ic"><use href="#i-check"/></svg></span><span class="texto"><b>É o processo certo</b></span></label>
+          <label class="item"><input type="checkbox" class="ne-chk-conf"><span class="caixa"><svg class="ic"><use href="#i-check"/></svg></span><span class="texto"><b>É a gerência (unidade) correta</b></span></label>
+        </div>
+        <div class="acao linha">
+          <button class="btn primario grande" id="ne-btn-conf-ok" type="button" disabled><svg class="ic"><use href="#i-check"/></svg> Concluí a conferência</button>
+        </div>
+      </div>
+
+      <!-- Concluída (uma NE) -->
+      <div class="ne-passo" id="ne-p-concluido" hidden>
+        <div class="sucesso">
+          <div class="sucesso-ic"><svg class="ic"><use href="#i-check"/></svg></div>
+          <h1>NE <span class="mono" id="ne-fim-ne">—</span> anexada no processo <span class="mono" id="ne-fim-processo">—</span></h1>
+          <p class="tempo-fim" id="ne-fim-tempo" hidden></p>
+          <p class="lead">Você continua logado. Para outra NE, não precisa entrar de novo no SIGEF nem no SEI.</p>
+          <div class="acao linha centro">
+            <button class="btn primario grande" id="ne-btn-outra" type="button">Processar outra Nota de Empenho <svg class="ic"><use href="#i-seta"/></svg></button>
+            <button class="btn fantasma" id="ne-btn-fim-pasta" type="button"><svg class="ic"><use href="#i-pasta"/></svg>Abrir pasta do processo</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Fim do lote -->
+      <div class="ne-passo" id="ne-p-lotefim" hidden>
+        <header class="cabeca">
+          <p class="sobre">Nota de Empenho · lote</p>
+          <h1 id="ne-lotefim-titulo">Lote concluído</h1>
+          <p class="lead" id="ne-lotefim-lead"></p>
+        </header>
+        <div class="contadores" id="ne-lotefim-contadores"></div>
+        <div class="alerta-grande">
+          <svg class="ic"><use href="#i-alerta"/></svg>
+          <div><strong>Conferência obrigatória — em cada processo abaixo</strong><p>Antes de salvar, ordenar ou assinar, confira no SEI se a NE certa entrou no processo certo e na gerência correta. NE que já tinha sido anexada antes foi anexada de novo: exclua o que ficar em dobro.</p></div>
+        </div>
+        <div class="previa">
+          <div class="previa-rolagem alta">
+            <table>
+              <thead><tr><th>Linha</th><th>Processo</th><th>NE</th><th>Situação</th><th>Tempo</th></tr></thead>
+              <tbody id="ne-lotefim-linhas"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="acao linha">
+          <button class="btn primario" id="ne-btn-lote-refazer" type="button" hidden>Tentar de novo as que deram erro <svg class="ic"><use href="#i-seta"/></svg></button>
+          <button class="btn fantasma" id="ne-btn-lote-relatorio" type="button"><svg class="ic"><use href="#i-planilha"/></svg>Abrir relatório (.csv)</button>
+          <button class="btn fantasma" id="ne-btn-lote-novo" type="button">Novo lote</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- Módulo: Gerar pagamento (Anexar Documentos) (anexar.js ↔ janela/modulo_anexar.py) ---------- -->
+    <section class="tela tela-larga" id="tela-anexar" hidden>
+      <div class="dare-status anx-topo" role="status">
+        <b>Gerar pagamento</b><span>Anexar Documentos versão <span data-anx-versao>—</span></span>
+        <span class="anx-acess">
+          <button class="btn fantasma pequeno" type="button" id="anx-como-usar">Como usar esta tela</button></span>
+      </div>
+      <div id="anx-corpo"></div>
+    </section>
+
+    <!-- ---------- Módulo: Cadastro de Credores (cadastro.js ↔ janela/modulo_cadastro.py) ---------- -->
+    <section class="tela tela-larga" id="tela-cadastro" hidden>
+      <div class="dare-status cad-topo" role="status">
+        <b>Cadastro de Credores no SIGEF</b><span>versão <span data-cad-versao>—</span></span>
+        <span class="anx-acess">
+          <button class="btn fantasma pequeno" type="button" id="cad-estatisticas">Estatísticas</button><button class="btn fantasma pequeno" type="button" id="cad-ajuda">Ajuda (F1)</button></span>
+      </div>
+      <div id="cad-corpo"></div>
     </section>
 
     <!-- ---------- Módulo: Banco do Brasil ---------- -->
@@ -733,75 +1086,27 @@
         </div>
       </div>
 
-      <!-- Desempenho -->
+      <!-- Diagnóstico (os números dos lançamentos ficam no Relatório geral) -->
       <div class="dare-pagina" data-dare-pagina="desempenho" hidden>
         <div class="dare-pag-cab">
           <div>
-            <h2>Desempenho e diagnóstico</h2>
-            <p>Medições do sistema e da automação, para acompanhamento, estudo e apresentação.</p>
+            <h2>Diagnóstico do computador</h2>
+            <p>Monitor em tempo real, diagnóstico e testes de velocidade, para achar o que deixa a automação lenta.</p>
           </div>
           <div class="dare-acoes">
-            <button class="btn fantasma" type="button" id="dare-btn-csv">Exportar dados (CSV)…</button>
-            <button class="btn primario" type="button" id="dare-btn-relatorio">Gerar relatório…</button>
+            <button class="btn fantasma" type="button" id="dare-btn-csv">Exportar tempos (CSV)…</button>
+            <button class="btn primario" type="button" data-relatorio-geral><svg class="ic" aria-hidden="true"><use href="#i-grafico"/></svg>Relatório geral</button>
           </div>
         </div>
+        <div class="dare-banner info" role="note"><span class="txt"><b>Onde estão as estatísticas dos lançamentos?</b><br>Tempo de cada etapa, taxa de sucesso e tempo economizado agora ficam no <b>Relatório geral</b>, junto com as outras automações.</span>
+          <button class="btn fantasma" type="button" data-relatorio-geral>Abrir o Relatório geral</button></div>
         <div class="abas internas" role="tablist" id="dare-des-abas">
-          <button class="aba ativa" type="button" data-des-aba="auto">Automação</button>
-          <button class="aba" type="button" data-des-aba="monitor">Monitor em tempo real</button>
+          <button class="aba ativa" type="button" data-des-aba="monitor">Monitor em tempo real</button>
           <button class="aba" type="button" data-des-aba="diag">Diagnóstico do sistema</button>
           <button class="aba" type="button" data-des-aba="testes">Testes de velocidade</button>
         </div>
 
-        <div data-des-painel="auto">
-          <div class="dare-mini-cab">
-            <label class="check"><input type="checkbox" id="dare-so-sucesso" checked> Estatísticas só com lançamentos concluídos com sucesso</label>
-            <button class="btn fantasma pequeno dir" type="button" id="dare-des-atualizar">↻ Atualizar</button>
-          </div>
-          <div class="dare-kpis k5">
-            <div class="dare-kpi" id="dare-d-lotes"><div class="rot">Lançamentos medidos</div><div class="val">—</div><div class="sub"></div></div>
-            <div class="dare-kpi" id="dare-d-taxa"><div class="rot">Taxa de sucesso</div><div class="val">—</div><div class="sub"></div></div>
-            <div class="dare-kpi" id="dare-d-media"><div class="rot">Tempo médio / lote</div><div class="val">—</div><div class="sub"></div></div>
-            <div class="dare-kpi" id="dare-d-hora"><div class="rot">Lotes por hora</div><div class="val">—</div><div class="sub"></div></div>
-            <div class="dare-kpi" id="dare-d-conexao"><div class="rot">Conexão ao navegador</div><div class="val">—</div><div class="sub"></div></div>
-          </div>
-          <p class="dare-texto" id="dare-des-vazio" hidden>Ainda não há medições. Os tempos são registrados automaticamente a cada lançamento processado por este aplicativo.</p>
-          <div class="dare-grade g2">
-            <div class="dare-cartao">
-              <h3>Tempo médio por etapa</h3>
-              <p class="sub">Em âmbar, a etapa mais demorada (gargalo).</p>
-              <div id="dare-g-etapas"></div>
-              <p class="dare-texto" id="dare-gargalo" style="margin-top:8px"></p>
-            </div>
-            <div class="dare-cartao">
-              <h3>Divisão do tempo</h3>
-              <p class="sub">Quanto de cada lançamento vai para o DARE e para o SEI.</p>
-              <div class="dare-divisao" id="dare-divisao"></div>
-              <p class="dare-texto" id="dare-divisao-txt"></p>
-              <hr class="dare-sep">
-              <b style="font-size:13.5px">Como os tempos são medidos</b>
-              <p class="dare-texto">Cada etapa é cronometrada com relógio de alta resolução no momento em que o programa a inicia. Os dados ficam em dados/desempenho.csv (sem CPF nem processo) e podem ser exportados para o Excel.</p>
-            </div>
-          </div>
-          <div class="dare-grade g11">
-            <div class="dare-cartao">
-              <h3>Tempo de cada lançamento</h3>
-              <p class="sub">Últimos 60, em segundos (linha = tempo total).</p>
-              <div id="dare-g-lotes"></div>
-            </div>
-            <div class="dare-cartao">
-              <h3>Lançamentos por dia</h3>
-              <p class="sub">Últimos 14 dias, a partir do histórico.</p>
-              <div id="dare-g-dias"></div>
-            </div>
-          </div>
-          <div class="dare-cartao">
-            <h3>Estatística descritiva (segundos)</h3>
-            <p class="sub">n = amostras · P95 = 95% dos lotes levaram até este tempo · CV = desvio ÷ média (variabilidade).</p>
-            <div class="dare-tabela" id="dare-estat"></div>
-          </div>
-        </div>
-
-        <div data-des-painel="monitor" hidden>
+        <div data-des-painel="monitor">
           <div class="dare-mini-cab">
             <button class="btn primario" type="button" id="dare-btn-monitor">▶ Iniciar monitor</button>
             <span class="dare-texto" id="dare-monitor-txt">Mede o uso do computador a cada segundo (últimos 2 minutos). Deixe ligado durante um processamento para ver o impacto da automação.</span>
@@ -901,26 +1206,106 @@
   </main>
 </div>
 
-<!-- Relatório gerencial -->
-<div class="modal" id="modal-relatorio" hidden>
-  <div class="modal-caixa" role="dialog" aria-modal="true" aria-labelledby="rel-titulo">
+<!-- Relatório geral: TODAS as automações numa página só (central.js) -->
+<div class="modal" id="painel-modal" hidden>
+  <div class="modal-caixa" role="dialog" aria-modal="true" aria-labelledby="painel-titulo" aria-describedby="painel-sobre">
     <div>
-      <h2 id="rel-titulo" style="margin:0 0 4px">Relatório gerencial</h2>
-      <p class="nota" style="margin:0">OBs, processos, documentos anexados e tempo da automação no período, com gráficos. Abre no navegador; dá para imprimir ou salvar em PDF.</p>
+      <h2 id="painel-titulo" class="modal-titulo">Relatório geral</h2>
+      <p class="nota" id="painel-sobre">Todas as automações juntas — Anexar no SEI, Nota de Empenho, DARE, Gerar pagamento e Cadastro de Credores: tempo economizado, por mês, por pessoa e o detalhe de cada uma. Abre no navegador; dá para imprimir ou salvar em PDF.</p>
     </div>
-    <div class="rel-campos">
-      <div class="campo"><label for="rel-de">De</label><input id="rel-de" type="date"></div>
-      <div class="campo"><label for="rel-ate">Até</label><input id="rel-ate" type="date"></div>
-    </div>
-    <div class="campo">
-      <label for="rel-minutos">Minutos para fazer uma OB à mão</label>
-      <input id="rel-minutos" type="number" min="1" step="1" inputmode="decimal">
-      <p class="dica">Média de quem faz sem o programa: baixar CE, NL, PP e OB no SIGEF e incluir cada uma no SEI. Usado para calcular o tempo economizado.</p>
-    </div>
-    <p class="rel-erro" id="rel-erro" hidden></p>
+    <fieldset class="campo">
+      <legend>Período</legend>
+      <div class="atalhos-periodo" role="group" aria-label="Períodos prontos">
+        <button class="btn fantasma pequeno" type="button" data-periodo="mes">Este mês</button>
+        <button class="btn fantasma pequeno" type="button" data-periodo="mes-passado">Mês passado</button>
+        <button class="btn fantasma pequeno" type="button" data-periodo="30">Últimos 30 dias</button>
+        <button class="btn fantasma pequeno" type="button" data-periodo="ano">Este ano</button>
+      </div>
+      <div class="rel-campos">
+        <div class="campo"><label for="painel-de">De</label><input id="painel-de" type="date"></div>
+        <div class="campo"><label for="painel-ate">Até</label><input id="painel-ate" type="date"></div>
+      </div>
+    </fieldset>
+    <details class="campo rel-avancado">
+      <summary>Quanto tempo leva cada item feito à mão</summary>
+      <div class="rel-campos">
+        <div class="campo"><label for="painel-min-ob">OB (min)</label><input id="painel-min-ob" type="number" min="1" step="1" inputmode="decimal"></div>
+        <div class="campo"><label for="painel-min-ne">NE (min)</label><input id="painel-min-ne" type="number" min="1" step="1" inputmode="decimal"></div>
+        <div class="campo"><label for="painel-min-dare">DARE (min)</label><input id="painel-min-dare" type="number" min="1" step="1" inputmode="decimal"></div>
+      </div>
+      <p class="dica">Economizado = concluídos × minutos à mão − tempo da automação. O Gerar pagamento e o Cadastro usam as estimativas das telas deles.</p>
+    </details>
+    <details class="campo rel-avancado">
+      <summary>Pessoas no relatório <span class="qtd" id="painel-qtd-pessoas"></span></summary>
+      <ul class="painel-pastas" id="painel-pastas"></ul>
+      <button class="btn fantasma pequeno" id="painel-incluir" type="button"><svg class="ic" aria-hidden="true"><use href="#i-pasta"/></svg>Incluir a pasta de outra pessoa…</button>
+      <p class="dica">Cada pessoa tem as suas pastas de dados (Documentos\Automacao SIGEF-SEI, DARE Automação e Anexar Documentos). Para somar a equipe, inclua a pasta Documentos de cada colega (copiada ou na rede).</p>
+    </details>
+    <p class="rel-erro" id="painel-erro" role="alert" hidden></p>
     <div class="acao linha fim">
-      <button class="btn fantasma" id="rel-cancelar" type="button">Cancelar</button>
-      <button class="btn primario" id="rel-gerar" type="button">Gerar e abrir <svg class="ic"><use href="#i-seta"/></svg></button>
+      <button class="btn fantasma" id="painel-cancelar" type="button">Cancelar</button>
+      <button class="btn primario" id="painel-gerar" type="button">Gerar e abrir <svg class="ic" aria-hidden="true"><use href="#i-seta"/></svg></button>
+    </div>
+  </div>
+</div>
+
+<!-- Entrar nos sistemas antes de começar (central.js, lbaLogin): o mesmo passo do Anexar no SEI e da NE,
+     para as automações que não tinham (DARE e Banco do Brasil). Abre o Chrome só com as abas da automação. -->
+<div class="modal" id="entrar-modal" hidden>
+  <div class="modal-caixa" role="dialog" aria-modal="true" aria-labelledby="entrar-titulo" aria-describedby="entrar-sobre">
+    <div>
+      <p class="sobre" id="entrar-automacao"></p>
+      <h2 id="entrar-titulo" class="modal-titulo">Entre nos sistemas antes de começar</h2>
+      <p class="nota" id="entrar-sobre">No Chrome da automação, faça o login (se ainda não entrou) e confirme abaixo. O programa só começa depois disso.</p>
+    </div>
+    <div class="carregando" id="entrar-carregando">
+      <div class="giro" aria-hidden="true"></div>
+      <div><strong>Abrindo o navegador da automação…</strong><span id="entrar-status">Isso leva alguns segundos.</span></div>
+    </div>
+    <div class="erro" id="entrar-erro" hidden>
+      <div class="erro-cab"><svg class="ic" aria-hidden="true"><use href="#i-alerta"/></svg><strong>Não consegui abrir o navegador</strong></div>
+      <pre id="entrar-erro-msg"></pre>
+      <button class="btn primario" type="button" id="entrar-tentar">Tentar de novo</button>
+    </div>
+    <div id="entrar-pronto" hidden>
+      <p class="nota" id="entrar-abas" role="status"></p>
+      <div class="checagem" id="entrar-checagem"></div>
+    </div>
+    <div class="acao linha fim">
+      <button class="btn fantasma" id="entrar-cancelar" type="button">Cancelar</button>
+      <button class="btn fantasma" id="entrar-reabrir" type="button" hidden>Não vejo o navegador — abrir de novo</button>
+      <button class="btn primario" id="entrar-ok" type="button" disabled>Já entrei — começar <svg class="ic" aria-hidden="true"><use href="#i-seta"/></svg></button>
+    </div>
+  </div>
+</div>
+
+<!-- Acessibilidade: vale para o aplicativo inteiro (central.js) -->
+<div class="modal" id="acess-modal" hidden>
+  <div class="modal-caixa" role="dialog" aria-modal="true" aria-labelledby="acess-titulo" aria-describedby="acess-sobre">
+    <div>
+      <h2 id="acess-titulo" class="modal-titulo">Acessibilidade</h2>
+      <p class="nota" id="acess-sobre">Vale para todas as automações e fica guardado para a próxima vez.</p>
+    </div>
+    <fieldset class="campo">
+      <legend>Tamanho do texto</legend>
+      <div class="acess-tamanhos" role="radiogroup" aria-label="Tamanho do texto">
+        <label class="acess-tam"><input type="radio" name="acess-tamanho" value="1"><span style="font-size:14px">A</span><small>Normal</small></label>
+        <label class="acess-tam"><input type="radio" name="acess-tamanho" value="1.15"><span style="font-size:17px">A</span><small>Grande</small></label>
+        <label class="acess-tam"><input type="radio" name="acess-tamanho" value="1.3"><span style="font-size:20px">A</span><small>Maior</small></label>
+        <label class="acess-tam"><input type="radio" name="acess-tamanho" value="1.5"><span style="font-size:23px">A</span><small>Máximo</small></label>
+      </div>
+      <p class="dica">Atalhos em qualquer tela: <kbd>Ctrl</kbd> + <kbd>+</kbd> aumenta, <kbd>Ctrl</kbd> + <kbd>−</kbd> diminui, <kbd>Ctrl</kbd> + <kbd>0</kbd> volta ao normal.</p>
+    </fieldset>
+    <fieldset class="campo">
+      <legend>Visão</legend>
+      <label class="check grande"><input type="checkbox" id="acess-contraste"><span><b>Alto contraste</b><small>Preto e branco com bordas fortes, para quem tem baixa visão.</small></span></label>
+      <label class="check grande"><input type="checkbox" id="acess-foco"><span><b>Destacar o foco e os links</b><small>Contorno amarelo grosso no item selecionado pelo teclado e links sublinhados.</small></span></label>
+      <label class="check grande"><input type="checkbox" id="acess-movimento"><span><b>Sem animações</b><small>Tira os movimentos e transições da tela.</small></span></label>
+      <label class="check grande"><input type="checkbox" id="acess-espaco"><span><b>Mais espaço entre linhas</b><small>Facilita a leitura de textos longos.</small></span></label>
+    </fieldset>
+    <div class="acao linha fim">
+      <button class="btn fantasma" id="acess-padrao" type="button">Voltar ao padrão</button>
+      <button class="btn primario" id="acess-fechar" type="button">Pronto</button>
     </div>
   </div>
 </div>
@@ -1008,6 +1393,10 @@
 
 <script src="modulos.js"></script>
 <script src="dare.js"></script>
+<script src="ne.js"></script>
+<script src="cadastro.js"></script>
+<script src="anexar.js"></script>
+<script src="central.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

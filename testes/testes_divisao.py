@@ -244,12 +244,12 @@ class TestaAnexarDocumento(unittest.TestCase):
         self.texto_na_tela = ""
         self.reabrir_funciona = True
 
-        def incluir(context, aba_sei, texto_link, rotulo, numero_pp=None, antes_de_criar=None):
+        def incluir(context, aba_sei, texto_link, rotulo, numero_pp=None, antes_de_criar=None, nome_arvore=""):
             if antes_de_criar:
                 antes_de_criar()
             pagina = PaginaFalsa(f"https://sei/editor/{len(self.criados) + 1}", self.texto_na_tela)
             self.criados.append({"texto_link": texto_link, "rotulo": rotulo, "numero_pp": numero_pp,
-                                 "pagina": pagina})
+                                 "nome_arvore": nome_arvore, "pagina": pagina})
             return pagina
 
         def colar(pagina_editor, arquivos, rotulo):
@@ -524,7 +524,7 @@ class TestaNomesUsadosPorFora(unittest.TestCase):
         self.assertEqual(parametros("ob_ja_concluida"), ["processo", "ob", "pasta_base"])
         self.assertEqual(parametros("_anexar_documento"),
                          ["context", "aba_sei", "progresso", "avisos", "chave", "descricao", "texto_link",
-                          "rotulo", "arquivos", "numero_pp"])
+                          "rotulo", "arquivos", "numero_pp", "nome_arvore"])  # nome_arvore: só a NE, padrão ""
         self.assertEqual(parametros("_preparar_imagem_para_insercao"), ["caminho_arquivo", "limite_bytes_arquivo"])
         self.assertEqual(parametros("_limpar_e_inserir_imagens"), ["pagina_editor", "arquivos", "rotulo"])
         self.assertEqual(parametros("_confirmar_imagens_persistidas"),

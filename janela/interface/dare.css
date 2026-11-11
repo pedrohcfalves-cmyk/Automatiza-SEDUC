@@ -196,7 +196,7 @@
 .dare-modal .modal-caixa .msg { white-space: pre-line; margin: 0; }
 .dare-modal .modal-caixa h3 { margin: 0; }
 .dare-modal .botoes { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
-.dare-modal.grande .modal-caixa { width: min(900px, 100%); max-height: calc(100vh - 40px); grid-template-rows: auto minmax(0, 1fr) auto; padding: 0; gap: 0; }
+.dare-modal.grande .modal-caixa { width: min(900px, 100%); max-height: calc(100vh / var(--acess-zoom, 1) - 40px); grid-template-rows: auto minmax(0, 1fr) auto; padding: 0; gap: 0; }
 .dare-modal.grande .topo { padding: 18px 22px 8px; }
 .dare-modal.grande .corpo { overflow: auto; padding: 4px 22px 14px; display: grid; gap: 12px; }
 .dare-modal.grande .rodape { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 22px; border-top: 1px solid var(--borda); background: var(--superficie-2); border-radius: 0 0 14px 14px; }
@@ -222,25 +222,24 @@
   .dare-mapa { grid-template-columns: minmax(0, 1fr); }
 }
 
-/* Páginas do DARE na barra lateral (a navegação do aplicativo DARE) */
-.dare-nav { display: grid; gap: 2px; }
+/* Páginas do DARE e do Gerar pagamento: abas na faixa abaixo do topo */
+.dare-nav { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 2px; }
 .dare-nav button {
-  all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; gap: 10px;
-  padding: 9px 10px; border-radius: 9px; font-size: 14px; color: var(--lateral-texto); opacity: .75;
-  transition: background .15s, opacity .15s;
+  all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; gap: 7px;
+  padding: 7px 10px; border-radius: 9px; font-size: 13.5px; color: var(--texto-2); min-height: 36px;
+  transition: background .15s, color .15s;
 }
-.dare-nav button:hover { opacity: 1; background: rgba(255,255,255,.06); }
-.dare-nav button.ativo { opacity: 1; background: rgba(255,255,255,.12); color: #fff; font-weight: 600; box-shadow: inset 3px 0 0 var(--verde-vivo); }
-.dare-nav button:focus-visible { outline: 2px solid var(--verde-vivo); }
-.dare-nav .ico { width: 20px; text-align: center; font-size: 15px; }
-.dare-nav .txt { flex: 1; }
+.dare-nav button:hover { background: var(--superficie-2); color: var(--texto); }
+.dare-nav button.ativo { background: var(--primaria-suave); color: var(--primaria-escura); font-weight: 600; box-shadow: inset 0 -2px 0 var(--primaria); }
+.dare-nav button:focus-visible { outline: 3px solid var(--primaria); outline-offset: 1px; }
+.dare-nav .ico { display: none; } /* no topo, só o nome: os símbolos tomavam o espaço dos nomes */
 .dare-nav .dare-badge { font-weight: 600; }
 @media (max-width: 760px) {
-  .lateral:has(.dare-nav:not([hidden])) { min-width: 0; max-width: 100vw; }
-  .dare-nav { grid-auto-flow: column; overflow-x: auto; min-width: 0; max-width: 100%; }
+  .dare-nav { flex-wrap: nowrap; overflow-x: auto; max-width: 100%; }
   .dare-nav button { white-space: nowrap; }
   .dare-status { flex-wrap: wrap; }
   .dare-status .pasta { flex-basis: 100%; }
+}
 }
 
 /* As perguntas do DARE aparecem por cima da janela "Importar planilha". */

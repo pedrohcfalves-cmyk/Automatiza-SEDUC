@@ -39,6 +39,7 @@ from automacoes.dare import (
     __version__,
     armazenamento,
     config,
+    juntar,
     limpeza,
     logger,
     menu,
@@ -456,7 +457,9 @@ def _iniciar() -> dict:
     _e.trava_chrome = True
     _e.executando = True
     _e.controle = motor.Controle()
-    lotes = list(_e.lotes)
+    # Mesma ordem do motor: lançamentos do mesmo processo seguidos (os PDFs são juntados
+    # por processo). A tela numera as linhas por esta lista.
+    lotes = juntar.ordenar_por_processo(_e.lotes)
     try:
         motor.iniciar_em_thread(lotes, _emitir_motor, _e.controle)
     except Exception:

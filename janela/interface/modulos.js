@@ -1,4 +1,5 @@
-/* Módulos da barra lateral: Anexar no SEI (app.js), DARE (dare.js) e Banco do Brasil.
+/* Automações nas abas do topo: Anexar no SEI (app.js), Nota de Empenho (ne.js), DARE (dare.js),
+ * Gerar pagamento / Anexar Documentos (anexar.js), Cadastro de Credores (cadastro.js) e Banco do Brasil.
  *
  * app.js expõe window.lbaModulos.ganchos (api, mostrar a tela do SEI,
  * registrar tratadores de evento). Aqui ficam só a troca de módulo e a
@@ -30,11 +31,18 @@
       if (ativo) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
     });
     $("passos").hidden = modulo !== "sei";
+    $("ne-passos").hidden = modulo !== "ne";
+    $("ne-versao-lateral").hidden = modulo !== "ne";
     $("contador").style.display = modulo === "sei" ? "" : "none";
-    // O DARE troca os passos do SEI pelas páginas dele (como a barra lateral do aplicativo DARE).
+    // O DARE troca os passos do SEI pelas páginas dele, na faixa abaixo do topo.
     const dare = window.lbaDare;
     if ($("dare-nav")) $("dare-nav").hidden = modulo !== "dare";
     if (dare && modulo !== "dare") dare.esconder();
+    // O Cadastro de Credores mostra a trilha dele; o Anexar Documentos, o menu dele (como o DARE).
+    $("cad-passos").hidden = modulo !== "cadastro";
+    $("anx-nav").hidden = modulo !== "anexar";
+    if (window.lbaCadastro && modulo !== "cadastro") window.lbaCadastro.esconder();
+    if (window.lbaAnexar && modulo !== "anexar") window.lbaAnexar.esconder();
     if (modulo === "sei") {
       g.mostrarSei();
       return;
@@ -43,6 +51,18 @@
     document.querySelector(".conteudo").scrollTop = 0;
     if (modulo === "dare") {
       if (dare) dare.mostrar();
+      return;
+    }
+    if (modulo === "ne") {
+      if (window.lbaNe) window.lbaNe.mostrar();
+      return;
+    }
+    if (modulo === "cadastro") {
+      if (window.lbaCadastro) window.lbaCadastro.mostrar();
+      return;
+    }
+    if (modulo === "anexar") {
+      if (window.lbaAnexar) window.lbaAnexar.mostrar();
       return;
     }
     if (!m.carregado[modulo]) carregar(modulo);
@@ -191,6 +211,8 @@
     }
     guardar("bb-auto", indice);
     guardar("bb-programa", respostas.programa);
+    // Antes de começar: o Chrome só com as abas do BB e do SEI, e o login confirmado (central.js).
+    if (window.lbaLogin && !(await window.lbaLogin.exigir("bb"))) return status("bb", "Entre no Banco do Brasil e no SEI para começar.", "erro");
     if (!g.api()) return demoRodar("bb", "BB · demonstração");
     const r = await g.api().bb_executar(valoresBb(), Number(indice), respostas);
     if (!r.ok) status("bb", r.erro || "Não consegui começar.", "erro");
@@ -286,6 +308,9 @@
     g = ganchos;
     g.registrarEventos(eventos);
     if (window.lbaDare) window.lbaDare.ligar(ganchos);
+    if (window.lbaNe) window.lbaNe.ligar(ganchos);
+    if (window.lbaCadastro) window.lbaCadastro.ligar(ganchos);
+    if (window.lbaAnexar) window.lbaAnexar.ligar(ganchos);
 
     document.querySelectorAll(".modulo").forEach((b) => (b.onclick = () => trocar(b.dataset.modulo)));
 

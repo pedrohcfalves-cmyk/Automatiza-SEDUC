@@ -1,7 +1,7 @@
 /* Módulo DARE — as páginas do aplicativo DARE dentro da Central.
  *
  * Mesmas páginas, mesmos botões e mesmas regras da janela do DARE
- * (Início, Lançamentos, Execução, Arquivos PDF, Desempenho, Configurações e
+ * (Início, Lançamentos, Execução, Arquivos PDF, Diagnóstico, Configurações e
  * a janela "Importar planilha"), no visual da Central.
  *
  * Tudo no Python passa por UMA porta: api.dare(acao, dados), que chega em
@@ -36,7 +36,7 @@
     executando: false,
     exec: { rodou: false, total: 0, inicio: 0, tempos: [], ok: 0, erros: 0, pdfs: {}, relogio: null, parando: false },
     arquivos: null,
-    desAba: "auto",
+    desAba: "monitor",
     diagFeito: false,
     monitor: false,
     serie: { cpu: [], ram: [], app_cpu: [], rede_rx: [], rede_tx: [], disco_leitura: [], disco_escrita: [] },
@@ -249,23 +249,6 @@
   const larguraDe = (el) => Math.max(320, el.clientWidth || el.parentElement.clientWidth || 520);
   const numCurto = (v) => (v >= 10 ? nBR(v, 0) : nBR(v, v >= 1 ? 1 : 2));
 
-  function barrasH(el, itens, unidade = "s") {
-    if (!itens.length) { el.innerHTML = '<p class="dare-mudo">Sem medições ainda.</p>'; return; }
-    const w = larguraDe(el), alt = 22, esp = 8, h = itens.length * (alt + esp) + 6;
-    const margem = Math.min(Math.max(...itens.map(([r]) => r.length)) * 6.6 + 18, w * 0.55);
-    const maior = Math.max(...itens.map(([, v]) => v)) || 1;
-    const iMaior = itens.findIndex(([, v]) => v === maior);
-    let svg = "";
-    itens.forEach(([rot, v], i) => {
-      const y = i * (alt + esp) + 3;
-      const lw = Math.max(2, (w - margem - 70) * (v / maior));
-      svg += `<text x="${margem - 10}" y="${y + 15}" text-anchor="end">${esc(rot)}</text>`;
-      svg += `<rect x="${margem}" y="${y}" width="${lw}" height="${alt}" rx="4" style="fill:${i === iMaior ? COR.ambar : COR.s1}"/>`;
-      svg += `<text x="${margem + lw + 8}" y="${y + 15}">${v >= 10 ? nBR(v, 0) : nBR(v, 2)} ${esc(unidade)}</text>`;
-    });
-    el.innerHTML = `<svg class="dare-grafico" viewBox="0 0 ${w} ${h}" height="${h}">${svg}</svg>`;
-  }
-
   function linhas(el, series, op = {}) {
     const w = larguraDe(el), h = op.altura || 210, esq = 46, dir = 12, topo = 18, base = h - 26;
     const todas = series.flatMap(([, , v]) => v);
@@ -290,31 +273,6 @@
     });
     const leg = series.map(([nome, cor, v]) => `<span><i style="background:${cor}"></i>${esc(nome)}${v.length ? ` · ${numCurto(v[v.length - 1])}` : ""}</span>`).join("");
     el.innerHTML = `<svg class="dare-grafico" viewBox="0 0 ${w} ${h}" height="${h}">${svg}</svg>${series.length > 1 ? `<div class="dare-legenda">${leg}</div>` : ""}`;
-  }
-
-  function colunas(el, nomes, categorias, altura = 210) {
-    const w = larguraDe(el), h = altura, esq = 34, topo = 12, base = h - 24;
-    const totais = categorias.map(([, v]) => v.reduce((a, b) => a + b, 0));
-    const max = Math.max(1, ...totais);
-    const passo = (w - esq - 6) / Math.max(1, categorias.length);
-    let svg = "";
-    for (let k = 0; k <= 4; k++) {
-      const v = Math.round((max * k) / 4), yy = base - (base - topo) * (v / max);
-      svg += `<line class="eixo" x1="${esq}" x2="${w - 6}" y1="${yy}" y2="${yy}"/><text x="${esq - 6}" y="${yy + 4}" text-anchor="end">${v}</text>`;
-    }
-    categorias.forEach(([rot, valores], i) => {
-      let acumulado = 0;
-      const x0 = esq + i * passo + passo * 0.18, lw = passo * 0.64;
-      valores.forEach((v, j) => {
-        if (!v) return;
-        const y1 = base - (base - topo) * ((acumulado + v) / max), y0 = base - (base - topo) * (acumulado / max);
-        svg += `<rect x="${x0}" y="${y1}" width="${lw}" height="${Math.max(1, y0 - y1)}" style="fill:${nomes[j][1]}"><title>${esc(rot)} · ${esc(nomes[j][0])}: ${v}</title></rect>`;
-        acumulado += v;
-      });
-      if (categorias.length <= 16 && (i % 2 === 0 || categorias.length <= 8)) svg += `<text x="${x0 + lw / 2}" y="${h - 6}" text-anchor="middle">${esc(rot)}</text>`;
-    });
-    const leg = nomes.map(([nome, cor]) => `<span><i style="background:${cor}"></i>${esc(nome)}</span>`).join("");
-    el.innerHTML = `<svg class="dare-grafico" viewBox="0 0 ${w} ${h}" height="${h}">${svg}</svg><div class="dare-legenda">${leg}</div>`;
   }
 
   function kpi(id, valor, sub = "", classe = "") {
@@ -344,7 +302,7 @@
     else if (pagina === "configuracoes") carregarConfiguracoes();
   }
 
-  /** O módulo DARE ficou visível na barra lateral (modulos.js). */
+  /** O módulo DARE ficou visível nas abas do topo (modulos.js). */
   function mostrar() {
     s.ativo = true;
     ir(s.pagina);
@@ -643,6 +601,8 @@
   }
 
   async function comecar() {
+    // Antes de começar: o Chrome só com as abas do DARE e do SEI, e o login confirmado (central.js).
+    if (window.lbaLogin && !(await window.lbaLogin.exigir("dare"))) return;
     const r = await chamar("iniciar");
     if (!r.ok) return toast(r.erro || "Não consegui começar.", "erro", 6000);
     s.executando = true;
@@ -966,8 +926,8 @@
     s.exec.parando = true;
     await chamar("parar");
     $("dare-btn-parar").disabled = true;
-    $("dare-exec-etapa").textContent = "Parando: o lançamento atual vai terminar e os demais ficam pendentes.";
-    logLocal("Parada solicitada: termina o lançamento atual e para.", "aviso");
+    $("dare-exec-etapa").textContent = "Parando: o lançamento atual vai terminar, os DAREs já gerados são anexados no SEI e os demais ficam pendentes.";
+    logLocal("Parada solicitada: termina o lançamento atual, anexa os DAREs já gerados e para.", "aviso");
   }
 
   function mostrarLogin() {
@@ -998,6 +958,29 @@
     tabExec.atualizarLinha(String(d.indice), { classe: "andamento", cels: Object.assign([...tabExec.linha(String(d.indice)).cels], { 1: "▶ Processando" }) });
     const tr = $("dare-exec-tabela").querySelector(`tr[data-id="${d.indice}"]`);
     if (tr) tr.scrollIntoView({ block: "nearest" });
+  }
+
+  // DARE gerado; o PDF espera os outros do mesmo processo para ser anexado junto.
+  function lotePdf(d) {
+    const id = String(d.indice), l = tabExec.linha(id);
+    s.exec.pdfs[id] = d.pdf;
+    if (!l) return;
+    const cels = [...l.cels];
+    cels[1] = "▣ PDF gerado"; cels[3] = d.servidor || "aguardando anexo"; cels[4] = `${nBR(d.segundos, 1)} s`;
+    tabExec.atualizarLinha(id, { classe: "andamento", cels });
+  }
+
+  function seiInicio(d) {
+    $("dare-exec-lote").textContent = "Anexando no SEI";
+    $("dare-exec-detalhe").textContent = `Processo ${d.processo} · ` +
+      (d.quantidade > 1 ? `${d.quantidade} DAREs juntados em um único PDF` : "1 DARE");
+    for (const i of d.indices) {
+      const l = tabExec.linha(String(i));
+      if (!l) continue;
+      const cels = [...l.cels];
+      cels[1] = "▶ Anexando";
+      tabExec.atualizarLinha(String(i), { classe: "andamento", cels });
+    }
   }
 
   function loteFim(d) {
@@ -1090,6 +1073,8 @@
         pintarEtapas(d.etapa);
         $("dare-exec-etapa").textContent = `Etapa atual: ${d.rotulo}`;
         break;
+      case "lote_pdf": lotePdf(d); break;
+      case "sei_inicio": seiInicio(d); break;
       case "lote_fim": loteFim(d); break;
       case "erro_geral":
         banner($("dare-exec-avisos"), "erro", `O processamento parou: ${d.mensagem}\nConfira se o navegador da automação está aberto e tente de novo.`);
@@ -1204,45 +1189,12 @@
     s.desAba = aba;
     document.querySelectorAll("#dare-des-abas .aba").forEach((b) => b.classList.toggle("ativa", b.dataset.desAba === aba));
     document.querySelectorAll("[data-des-painel]").forEach((p) => (p.hidden = p.dataset.desPainel !== aba));
-    if (aba === "auto") carregarAnalise();
-    else if (aba === "diag" && !s.diagFeito) diagnosticar();
+    if (aba === "diag" && !s.diagFeito) diagnosticar();
     else if (aba === "testes") carregarHistoricoTestes();
     else if (aba === "monitor") desenharMonitor();
   }
 
-  const statsVazias = (e) => !e || !e.n;
-
-  async function carregarAnalise() {
-    const a = await chamar("analise", { apenas_sucesso: $("dare-so-sucesso").checked });
-    if (!a.ok) return;
-    kpi("dare-d-lotes", String(a.lotes), a.lotes ? `em ${a.execucoes} execução(ões)` : "nenhum ainda");
-    kpi("dare-d-taxa", a.lotes ? `${nBR(a.taxa, 1)} %` : "—", a.lotes ? `${a.erros} com erro` : "", a.lotes ? (a.taxa >= 90 ? "ok" : "aviso") : "");
-    kpi("dare-d-media", a.total.n ? `${nBR(a.total.media, 1)} s` : "—", a.total.n ? `mediana ${nBR(a.total.mediana, 1)} s` : "");
-    kpi("dare-d-hora", a.lotes_por_hora ? nBR(a.lotes_por_hora, 0) : "—", "estimado pela média");
-    kpi("dare-d-conexao", a.conexao.n ? `${nBR(a.conexao.media, 1)} s` : "—", a.conexao.n ? "média ao iniciar" : "");
-    $("dare-des-vazio").hidden = !!a.lotes;
-    barrasH($("dare-g-etapas"), a.etapas.map((e) => [e.rotulo, e.media]));
-    $("dare-gargalo").textContent = a.gargalo;
-    const dare = a.dare.media || 0, sei = a.sei.media || 0, tot = dare + sei;
-    const div = $("dare-divisao");
-    if (!tot) { div.innerHTML = ""; $("dare-divisao-txt").textContent = "Sem medições ainda."; }
-    else {
-      const pd = (dare / tot) * 100;
-      div.innerHTML = `<div style="width:${pd}%;background:${COR.s1}">${pd > 14 ? `DARE ${nBR(pd, 0)} %` : ""}</div><div style="width:${100 - pd}%;background:${COR.s2}">${100 - pd > 14 ? `SEI ${nBR(100 - pd, 0)} %` : ""}</div>`;
-      $("dare-divisao-txt").textContent = `DARE: ${nBR(dare)} s em média (preencher, imprimir e salvar o PDF).\nSEI: ${nBR(sei)} s em média (abrir o processo e anexar).`;
-    }
-    linhas($("dare-g-lotes"), a.ultimos_totais.length ? [["Tempo total", COR.s1, a.ultimos_totais]] : [], { unidade: "s", rotulosX: ["mais antigo", "mais recente"] });
-    colunas($("dare-g-dias"), [["Concluídos", COR.s3], ["Com erro", COR.erro]], a.dias.map((d) => [d.dia, [d.ok, d.erro]]));
-    const t = new Tabela($("dare-estat"), ["Medida", "n", "Média", "Mediana", "Desvio", "Mín", "Máx", "P95", "CV"].map((titulo, i) => ({ chave: String(i), titulo, classe: i ? "num" : "" })),
-      { selecao: "none", ordenavel: false, vazio: "Sem medições ainda." });
-    const lin = [["Lançamento completo", a.total], ["Fase DARE (gerar + PDF)", a.dare], ["Fase SEI (anexar)", a.sei], ["Conexão com o navegador", a.conexao]]
-      .concat(a.etapas.map((e) => [`   ${e.rotulo}`, e]));
-    t.definir(lin.filter(([, e]) => !statsVazias(e)).map(([nome, e], i) => ({
-      id: String(i), cels: [nome, e.n, nBR(e.media), nBR(e.mediana), nBR(e.desvio), nBR(e.minimo), nBR(e.maximo), nBR(e.p95), `${nBR(e.cv, 1)} %`],
-    })));
-    $("dare-btn-monitor").disabled = !a.psutil;
-    if (!a.psutil) $("dare-monitor-txt").textContent = "O componente psutil não está instalado: o monitor não está disponível.";
-  }
+  // As estatísticas dos lançamentos (etapas, taxa de sucesso, tempo por dia) ficam no Relatório geral (central.js).
 
   async function alternarMonitor() {
     const ligar = !s.monitor;
@@ -1338,13 +1290,6 @@
     const r = await chamar("exportar_csv");
     if (r.ok) return toast("Medições exportadas.");
     if (r.erro) perguntar(r.erro, [{ rotulo: "OK", valor: true, classe: "primario" }]);
-  }
-
-  async function gerarRelatorio() {
-    const r = await chamar("relatorio", { apenas_sucesso: $("dare-so-sucesso").checked });
-    if (!r.ok) { if (r.erro) toast(r.erro, "erro", 6000); return; }
-    toast("Relatório gerado. Abrindo no navegador…");
-    if (r.sem_diagnostico) toast("Dica: rode o Diagnóstico antes para incluí-lo no relatório.", "info", 5000);
   }
 
   // ----------------------------------------------------- Configurações
@@ -1468,13 +1413,10 @@
 
     // Desempenho
     document.querySelectorAll("#dare-des-abas .aba").forEach((b) => (b.onclick = () => trocarAbaDesempenho(b.dataset.desAba)));
-    $("dare-so-sucesso").onchange = carregarAnalise;
-    $("dare-des-atualizar").onclick = carregarAnalise;
     $("dare-btn-monitor").onclick = alternarMonitor;
     $("dare-btn-diag").onclick = diagnosticar;
     $("dare-btn-testes").onclick = rodarTestes;
     $("dare-btn-csv").onclick = exportarCsv;
-    $("dare-btn-relatorio").onclick = gerarRelatorio;
 
     // Configurações
     $("dare-cfg-abrir").onchange = async () => {

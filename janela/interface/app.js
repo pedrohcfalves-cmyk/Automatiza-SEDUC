@@ -19,6 +19,7 @@
     ob: "",
     tipoOb: "",
     documentos: DOCUMENTOS.slice(), // os marcados quando o processo/lote começou
+    modoCe: "pp", // de onde sai a CE: "pp" (de sempre) ou "impressao"
     tiposOb: {
       regularizacao: "OB - Ordem Bancária de Regularização",
       ordem_bancaria: "OB - Ordem Bancária",
@@ -36,7 +37,7 @@
   // ------------------------------------------------------------ Telas
 
   // As telas do SIGEF → SEI só aparecem quando esse módulo está aberto na
-  // barra lateral (modulos.js); vendo outro módulo, a tela é só lembrada
+  // abas do topo (modulos.js); vendo outro módulo, a tela é só lembrada
   // e volta quando a pessoa voltar para "Anexar no SEI".
   function mostrar(tela) {
     estado.telaSei = tela;
@@ -57,12 +58,30 @@
 
   // ---------------------------------------------------------- Registro
 
+  /* O download imprime dezenas de linhas por segundo. Elas entram juntas,
+   * algumas vezes por segundo (um só cálculo de layout), e só as últimas
+   * ficam na tela -- o registro completo está no arquivo de registros/. */
+  const MAX_LINHAS_REGISTRO = 3000;
+  const pendentesRegistro = [];
+
   function registrar(texto) {
+    pendentesRegistro.push(texto + "\n");
+    estado.linhas += 1;
+    // setTimeout, e não requestAnimationFrame: com a janela minimizada o rAF
+    // para, e as linhas se acumulariam na memória até ela voltar.
+    if (pendentesRegistro.length === 1) setTimeout(despejarRegistro, 80);
+  }
+
+  function despejarRegistro() {
     const pre = $("registro-txt");
     const perto = pre.scrollHeight - pre.scrollTop - pre.clientHeight < 40;
-    pre.textContent += texto + "\n";
+    // Um nó por linha, todos de uma vez (fragmento): cortar as velhas é exato.
+    const fragmento = document.createDocumentFragment();
+    for (const linha of pendentesRegistro.slice(-MAX_LINHAS_REGISTRO)) fragmento.appendChild(document.createTextNode(linha));
+    pendentesRegistro.length = 0;
+    pre.appendChild(fragmento);
+    for (let excesso = pre.childNodes.length - MAX_LINHAS_REGISTRO; excesso > 0; excesso--) pre.removeChild(pre.firstChild);
     if (perto) pre.scrollTop = pre.scrollHeight;
-    estado.linhas += 1;
     $("registro-qtd").textContent = estado.linhas;
   }
 
@@ -181,7 +200,9 @@
   const tratar = {
     log: (e) => {
       registrar(e.texto);
-      interpretar(e.texto);
+      // Com a NE rodando, as linhas são dela (ne.js): a tela da OB não se mexe.
+      if (window.lbaNe && window.lbaNe.rodando) window.lbaNe.log(e.texto);
+      else interpretar(e.texto);
       if (!$("tela-login").hidden && e.texto.trim()) $("login-status").textContent = e.texto.trim();
     },
 
@@ -452,6 +473,16 @@
     return ok ? docs : null;
   }
 
+  // ---- Como listar e imprimir a CE (o mesmo nas abas Um processo e Vários)
+
+  const modoCeEscolhido = () => (document.querySelector('input[name="modo-ce"]:checked') || {}).value || "pp";
+
+  function marcarModoCe(modo) {
+    const valor = modo === "impressao" ? "impressao" : "pp";
+    document.querySelectorAll('input[name="modo-ce"], input[name="modo-ce-lote"]')
+      .forEach((r) => (r.checked = r.value === valor));
+  }
+
   const tipoEscolhido = () => (document.querySelector('input[name="tipo-ob"]:checked') || {}).value || "";
 
   function marcarTipo(tipo) {
@@ -471,8 +502,8 @@
     if (!docs) return document.querySelector(".chk-doc").focus();
 
     const r = api
-      ? await api.processar($("in-processo").value, $("in-ob").value, tipo, docs)
-      : { ok: true, processo, ob: $("in-ob").value.trim().toUpperCase(), tipo_ob: tipo, documentos: docs };
+      ? await api.processar($("in-processo").value, $("in-ob").value, tipo, docs, modoCeEscolhido())
+      : { ok: true, processo, ob: $("in-ob").value.trim().toUpperCase(), tipo_ob: tipo, documentos: docs, modo_ce: modoCeEscolhido() };
     if (!r.ok) {
       if (r.campo === "documentos") return conferirDocumentos(), document.querySelector(".chk-doc").focus();
       return r.campo === "tipo" ? document.querySelector('input[name="tipo-ob"]').focus() : $(`in-${r.campo}`).focus();
@@ -482,6 +513,7 @@
     estado.ob = r.ob;
     estado.tipoOb = r.tipo_ob;
     estado.documentos = r.documentos || docs;
+    estado.modoCe = r.modo_ce || modoCeEscolhido();
     iniciarExecucao();
     if (!api) demo.processar();
   }
@@ -557,12 +589,14 @@
     }, 350);
   }
 
-  async function iniciarLote(somenteLinhas, documentos) {
+  async function iniciarLote(somenteLinhas, documentos, modoCe) {
     const docs = documentos || conferirDocumentos();
     if (!docs) return document.querySelector(".chk-doc").focus();
-    const r = api ? await api.processar_lote(somenteLinhas || null, docs) : { ok: true };
+    const modo = modoCe || modoCeEscolhido();
+    const r = api ? await api.processar_lote(somenteLinhas || null, docs, modo) : { ok: true };
     if (!r.ok) return;
     estado.documentos = docs;
+    estado.modoCe = modo;
     estado.modo = "lote";
     estado.lote.itens = [];
     iniciarExecucao();
@@ -574,7 +608,8 @@
     $("exec-processo").textContent = estado.processo;
     $("exec-ob").textContent = estado.ob;
     $("exec-tipo").textContent = estado.tiposOb[estado.tipoOb] || "—";
-    $("exec-docs").textContent = descreverDocs(estado.documentos);
+    $("exec-docs").textContent = descreverDocs(estado.documentos) +
+      (estado.modoCe === "impressao" && estado.documentos.includes("CE") ? " · CE pela tela de impressão" : "");
     $("erro").hidden = true;
     $("resumo").hidden = true;
     $("conf-avisos").hidden = true;
@@ -656,7 +691,7 @@
       $("btn-parar-lote").textContent = "Vai parar ao fim deste processo";
     };
     $("btn-lote-refazer").onclick = () =>
-      iniciarLote(estado.lote.resultados.filter((r) => r.estado === "erro").map((r) => r.linha), estado.documentos);
+      iniciarLote(estado.lote.resultados.filter((r) => r.estado === "erro").map((r) => r.linha), estado.documentos, estado.modoCe);
     $("btn-lote-relatorio").onclick = () => api && api.abrir_arquivo(estado.lote.relatorio);
     $("btn-lote-novo").onclick = () => {
       $("in-lista").value = "";
@@ -680,6 +715,9 @@
       r.addEventListener("change", () => $("campo-tipo").classList.remove("invalido"))
     );
     document.querySelectorAll(".chk-doc").forEach((c) => c.addEventListener("change", conferirDocumentos));
+    document.querySelectorAll('input[name="modo-ce"], input[name="modo-ce-lote"]').forEach((r) =>
+      r.addEventListener("change", () => marcarModoCe(r.value))
+    );
 
     $("btn-conf-ok").onclick = () => {
       fase("conf", "feita");
@@ -697,12 +735,12 @@
     $("btn-erro-voltar").onclick = irParaDados;
     $("btn-erro-continuar").onclick = async () => {
       if (estado.modo === "lote") {
-        if (!estado.lote.itens.length) return iniciarLote(null, estado.documentos); // parou antes de começar
+        if (!estado.lote.itens.length) return iniciarLote(null, estado.documentos, estado.modoCe); // parou antes de começar
         const faltam = estado.lote.itens.filter((i) => i.estado !== "ok").map((i) => i.linha);
-        return faltam.length ? iniciarLote(faltam, estado.documentos) : irParaDados();
+        return faltam.length ? iniciarLote(faltam, estado.documentos, estado.modoCe) : irParaDados();
       }
       if (api) {
-        const r = await api.processar(estado.processo, estado.ob, estado.tipoOb, estado.documentos);
+        const r = await api.processar(estado.processo, estado.ob, estado.tipoOb, estado.documentos, estado.modoCe);
         if (!r.ok) return irParaDados();
       }
       iniciarExecucao();
@@ -719,40 +757,7 @@
     $("btn-erro-pasta").onclick = () => abrirPasta(estado.pastaProcesso || estado.pasta);
     $("btn-fim-pasta").onclick = () => abrirPasta(estado.pastaProcesso);
     $("btn-sair").onclick = () => (api ? api.fechar() : alert("Na janela real, isto fecha o programa."));
-
-    // ---- Relatório gerencial
-    const relErro = (texto) => {
-      $("rel-erro").textContent = texto || "";
-      $("rel-erro").hidden = !texto;
-    };
-    $("btn-relatorio-lateral").onclick = async () => {
-      const hoje = new Date();
-      const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-      const op = api
-        ? await api.opcoes_relatorio()
-        : { de: iso(new Date(hoje.getFullYear(), hoje.getMonth(), 1)), ate: iso(hoje), minutos_manual: 20 };
-      $("rel-de").value = op.de;
-      $("rel-ate").value = op.ate;
-      $("rel-minutos").value = op.minutos_manual;
-      relErro("");
-      $("modal-relatorio").hidden = false;
-      $("rel-minutos").focus();
-    };
-    $("rel-cancelar").onclick = () => ($("modal-relatorio").hidden = true);
-    $("modal-relatorio").addEventListener("keydown", (e) => e.key === "Escape" && ($("modal-relatorio").hidden = true));
-    $("rel-gerar").onclick = async () => {
-      if (!api) return relErro("Na janela real, isto gera o relatório e abre no navegador.");
-      const botao = $("rel-gerar");
-      botao.disabled = true;
-      relErro("");
-      try {
-        const r = await api.gerar_relatorio($("rel-de").value, $("rel-ate").value, $("rel-minutos").value);
-        if (r.ok) $("modal-relatorio").hidden = true;
-        else relErro(r.erro);
-      } finally {
-        botao.disabled = false;
-      }
-    };
+    // O relatório (de todas as automações) fica no menu do topo: central.js.
   }
 
   async function iniciar() {
@@ -769,6 +774,7 @@
     }
     estado.tipoOb = inicial.tipo_ob;
     marcarTipo(inicial.tipo_ob);
+    marcarModoCe(inicial.modo_ce);
     document.querySelectorAll('input[name="tipo-lote"]').forEach((r) => (r.checked = r.value === inicial.tipo_ob));
     mostrar("inicio");
   }

@@ -89,50 +89,107 @@ code { background: var(--superficie-2); border: 1px solid var(--borda); border-r
 
 /* ------------------------------------------------------------ Estrutura */
 
-.app { display: grid; grid-template-columns: 264px 1fr; height: 100vh; }
+/* Barra lateral à esquerda (marca, automações, Relatório geral, pasta, versão) e, no topo,
+   os passos da automação aberta no meio, com o Ano do SIGEF e a Acessibilidade à direita.
+   A janela rola só no conteúdo; a lateral rola sozinha se não couber (letra grande).
+   --acess-zoom: o tamanho do texto (central.js). O zoom da página não mexe no 100vh, então a altura é dividida por ele. */
+.app {
+  display: grid; grid-template-columns: 252px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr);
+  height: calc(100vh / var(--acess-zoom, 1));
+}
+.topo-app, .conteudo { min-width: 0; grid-column: 2; }
 
 .lateral {
-  background: linear-gradient(180deg, var(--lateral) 0%, var(--lateral-2) 100%);
-  color: var(--lateral-texto);
-  display: flex; flex-direction: column;
-  padding: 24px 18px 18px;
+  grid-row: 1 / -1; grid-column: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  display: flex; flex-direction: column; gap: 18px; padding: 18px 12px 14px;
+  background: linear-gradient(180deg, var(--lateral) 0%, var(--lateral-2) 100%); color: var(--lateral-texto);
 }
-.marca { display: flex; align-items: center; gap: 12px; padding: 0 6px 26px; }
-.logo { width: 44px; height: 44px; border-radius: 11px; background: rgba(255,255,255,.08); display: grid; place-items: center; }
-.logo svg { width: 34px; height: 34px; }
-.marca-nome { color: #fff; font-weight: 700; font-size: 17px; letter-spacing: .2px; }
-.marca-nome span { color: var(--verde-vivo); }
-.marca-sub { font-size: 12.5px; opacity: .75; }
+.marca { display: flex; align-items: center; gap: 11px; padding: 0 6px; }
+.logo { width: 38px; height: 38px; border-radius: 10px; background: rgba(255,255,255,.08); display: grid; place-items: center; flex: none; }
+.logo svg { width: 30px; height: 30px; }
+.marca-nome { color: #fff; font-weight: 700; font-size: 15.5px; letter-spacing: .2px; line-height: 1.2; }
+.marca-sub { font-size: 11.5px; opacity: .8; }
 
-.passos { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.lateral-rodape { margin-top: auto; display: grid; gap: 4px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.12); }
+.link-lateral {
+  all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: 9px; color: var(--lateral-texto);
+}
+.link-lateral .ic { width: 19px; height: 19px; flex: none; }
+.link-lateral span { display: grid; line-height: 1.25; }
+.link-lateral b { color: #fff; font-size: 13.5px; font-weight: 600; }
+.link-lateral small { font-size: 11.5px; opacity: .8; }
+.link-lateral:hover { background: rgba(255,255,255,.08); }
+.link-lateral:focus-visible { outline: 3px solid var(--verde-vivo); outline-offset: -2px; }
+.lateral .contador { margin: 6px 4px 0; }
+.lateral .versao { color: var(--lateral-texto); opacity: .75; padding: 2px 10px; }
+
+/* Topo: passos no meio; ano e acessibilidade à direita */
+.topo-app {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px 12px;
+  min-height: 60px; padding: 8px 16px; background: var(--superficie);
+  border-bottom: 1px solid var(--borda); box-shadow: 0 1px 2px rgba(16, 32, 56, .04);
+}
+.topo-passos { display: flex; justify-content: center; min-width: 0; container-type: inline-size; }
+.topo-passos > :not([hidden]) { max-width: 100%; }
+.menu-geral { display: flex; align-items: center; gap: 6px 8px; flex-wrap: wrap; justify-content: flex-end; }
+.menu-btn {
+  font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; color: var(--texto);
+  display: inline-flex; align-items: center; gap: 7px; min-height: 36px;
+  padding: 6px 11px; border-radius: 9px; background: var(--superficie); border: 1px solid var(--borda-forte);
+}
+.menu-btn:hover { background: var(--superficie-2); border-color: var(--primaria); }
+.menu-btn:focus-visible { outline: 3px solid var(--primaria); outline-offset: 2px; }
+.menu-btn.ligado { border-color: var(--primaria); background: var(--primaria-suave); color: var(--primaria-escura); }
+/* Ano do SIGEF (central.js): vale para todas as automações */
+.ano-sigef { display: flex; align-items: center; gap: 6px; font-size: 13px; position: relative; }
+.ano-sigef label { color: var(--texto-2); font-weight: 600; }
+.ano-sigef select { font: inherit; color: var(--texto); background: var(--superficie); border: 1px solid var(--borda-forte); border-radius: 8px; padding: 5px 6px; min-height: 34px; }
+.ano-sigef select:focus-visible { outline: 3px solid var(--primaria); outline-offset: 1px; }
+.ano-sigef small { position: absolute; top: 100%; right: 0; white-space: nowrap; font-size: 11.5px; color: var(--ambar); font-weight: 600; }
+.ano-sigef small:empty { display: none; }
+
+/* Passos como trilha horizontal: 1 — 2 — 3 */
+.passos { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px; }
 .passos li {
-  display: flex; align-items: center; gap: 12px;
-  padding: 10px 10px; border-radius: 9px; font-size: 14px;
-  opacity: .62; transition: background .2s, opacity .2s;
+  display: flex; align-items: center; gap: 6px; padding: 4px 8px 4px 4px; border-radius: 999px;
+  font-size: 13px; white-space: nowrap; color: var(--texto-3); transition: background .2s, color .2s;
+}
+.passos li + li::before { content: ""; width: 10px; height: 2px; background: var(--borda-forte); margin: 0 2px 0 -8px; border-radius: 2px; }
+/* Sem espaço para todos os nomes: só o passo atual mostra o nome (os outros continuam lidos pelo leitor de tela). */
+@container (max-width: 680px) {
+  .passos li:not(.atual) > span:last-child { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}
+/* O Modo treino do Gerar pagamento desce para a linha de baixo, sem o traço do lado. */
+@container (max-width: 780px) {
+  .anx-treino { flex-basis: 100%; justify-content: center; border-left: 0; margin: 2px 0 0; padding: 0; }
 }
 .bolha {
   width: 26px; height: 26px; border-radius: 50%; flex: none;
   display: grid; place-items: center; font-size: 12.5px; font-weight: 700;
-  border: 1.5px solid rgba(255,255,255,.35);
+  border: 1.5px solid var(--borda-forte); color: var(--texto-2); background: var(--superficie);
 }
-.passos li.feito { opacity: .9; }
-.passos li.feito .bolha { background: var(--verde-vivo); border-color: var(--verde-vivo); color: #07321F; font-size: 0; }
+.passos li.feito { color: var(--texto-2); }
+.passos li.feito .bolha { background: var(--verde); border-color: var(--verde); color: #fff; font-size: 0; }
 .passos li.feito .bolha::after { content: "✓"; font-size: 14px; }
-.passos li.atual { opacity: 1; background: rgba(255,255,255,.09); color: #fff; }
-.passos li.atual .bolha { background: #fff; color: var(--lateral); border-color: #fff; }
+.passos li.atual { color: var(--texto); font-weight: 600; background: var(--primaria-suave); }
+.passos li.atual .bolha { background: var(--primaria); color: #fff; border-color: var(--primaria); }
 
-.lateral-rodape { margin-top: auto; display: grid; gap: 10px; }
-.contador { background: rgba(255,255,255,.07); border-radius: 10px; padding: 10px 12px; font-size: 12.5px; line-height: 1.35; display: flex; gap: 10px; align-items: center; }
-.contador strong { font-size: 22px; color: #fff; }
+.contador { display: flex; gap: 8px; align-items: center; font-size: 12.5px; color: var(--texto-2); background: var(--verde-suave); border-radius: 999px; padding: 4px 12px 4px 6px; }
+.contador strong { font-size: 15px; color: var(--verde); background: var(--superficie); border-radius: 999px; min-width: 26px; text-align: center; padding: 1px 6px; }
 .link-pasta {
   all: unset; cursor: pointer; display: flex; align-items: center; gap: 8px;
-  font-size: 13px; padding: 8px 10px; border-radius: 8px; color: var(--lateral-texto);
+  font-size: 13px; padding: 8px 10px; border-radius: 8px; color: var(--texto-2);
 }
-.link-pasta:hover { background: rgba(255,255,255,.08); color: #fff; }
-.link-pasta:focus-visible { outline: 2px solid var(--verde-vivo); }
-.versao { font-size: 11.5px; opacity: .5; padding: 0 10px; }
+.link-pasta:hover { background: var(--superficie-2); color: var(--texto); }
+.link-pasta:focus-visible { outline: 3px solid var(--primaria); }
+.painel-pastas { list-style: none; margin: 4px 0 8px; padding: 0; display: grid; gap: 6px; }
+.painel-pastas li { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.painel-pastas li .caminho { color: var(--texto-3); font-family: var(--mono); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.versao { font-size: 12px; color: var(--texto-3); }
 
-.conteudo { overflow-y: auto; padding: 40px 48px 28px; display: flex; flex-direction: column; }
+.conteudo { overflow-y: auto; padding: 32px 40px 28px; display: flex; flex-direction: column; align-items: center; }
+.conteudo:focus { outline: none; }
 .tela { max-width: 820px; width: 100%; animation: entra .25s ease-out; }
 @keyframes entra { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
@@ -448,18 +505,29 @@ fieldset.campo-docs { margin-bottom: 26px; }
 
 /* --------------------------------------------------- Janela estreita */
 
+@media (max-width: 1180px) {
+  .topo-app { grid-template-columns: 1fr; }
+  .menu-geral { grid-row: 1; }
+}
 @media (max-width: 980px) {
-  .app { grid-template-columns: 220px 1fr; }
-  .conteudo { padding: 30px 28px 22px; }
+  /* A lateral fica só com os ícones; o nome continua para o leitor de tela e no "title". */
+  .app { grid-template-columns: 68px minmax(0, 1fr); }
+  .lateral { padding: 14px 8px; align-items: stretch; }
+  .marca > div:not(.logo), .modulo span, .link-lateral span, .lateral .versao, .lateral .contador span {
+    position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+  }
+  .marca { justify-content: center; padding: 0; }
+  .modulo, .link-lateral { justify-content: center; padding: 10px 0; }
+  .lateral .contador { justify-content: center; padding: 4px; margin: 4px 0 0; }
+  .conteudo { padding: 26px 24px 22px; }
   .docs { grid-template-columns: repeat(2, 1fr); }
   .fase-txt small { max-width: 110px; }
 }
 @media (max-width: 760px) {
-  .app { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
-  .lateral { padding: 14px 16px; }
-  .marca { padding-bottom: 12px; }
-  .passos { grid-auto-flow: column; overflow-x: auto; }
-  .passos li span:last-child, .lateral-rodape { display: none; }
+  .topo-app { padding: 8px 12px; }
+  .passos, .dare-nav { flex-wrap: nowrap; overflow-x: auto; justify-content: flex-start; }
+  .passos li:not(.atual) > span:last-child { display: none; }
+  .menu-btn span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .conteudo { padding: 22px 16px; }
   .grade2, .opcoes-tipo { grid-template-columns: 1fr; }
   .opcoes-docs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -470,22 +538,23 @@ fieldset.campo-docs { margin-bottom: 26px; }
   .fase-linha { display: none; }
 }
 
-/* ------------------------------------------------ Módulos (barra lateral) */
+/* ------------------------------------------------ Automações (barra lateral) */
 
-.modulos { display: grid; gap: 4px; margin-bottom: 18px; padding-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,.1); }
+.modulos { display: grid; gap: 3px; }
 .modulo {
   all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; gap: 11px;
-  padding: 9px 10px; border-radius: 9px; color: var(--lateral-texto); opacity: .72;
-  transition: background .15s, opacity .15s;
+  padding: 9px 10px; border-radius: 10px; color: var(--lateral-texto); position: relative;
+  transition: background .15s, color .15s;
 }
 .modulo .ic { width: 20px; height: 20px; flex: none; }
 .modulo span { display: grid; line-height: 1.25; min-width: 0; }
 .modulo b { font-size: 14px; font-weight: 600; color: #fff; }
-.modulo small { font-size: 11.5px; opacity: .8; }
-.modulo:hover { opacity: 1; background: rgba(255,255,255,.06); }
-.modulo.ativo { opacity: 1; background: rgba(255,255,255,.12); box-shadow: inset 3px 0 0 var(--verde-vivo); }
-.modulo:focus-visible { outline: 2px solid var(--verde-vivo); }
-.modulo .rodando { width: 8px; height: 8px; border-radius: 50%; background: var(--verde-vivo); margin-left: auto; flex: none; animation: pulsa 1.2s ease-in-out infinite; }
+.modulo small { font-size: 11.5px; opacity: .82; }
+.modulo:hover { background: rgba(255,255,255,.08); }
+.modulo.ativo { background: rgba(255,255,255,.14); box-shadow: inset 3px 0 0 var(--verde-vivo); }
+.modulo.ativo .ic { color: var(--verde-vivo); }
+.modulo:focus-visible { outline: 3px solid var(--verde-vivo); outline-offset: -3px; }
+.modulo .rodando { width: 9px; height: 9px; border-radius: 50%; background: var(--verde-vivo); margin-left: auto; flex: none; animation: pulsa 1.2s ease-in-out infinite; }
 @keyframes pulsa { 50% { opacity: .3; } }
 
 /* ------------------------------------------------ Módulos (telas) */
@@ -538,3 +607,96 @@ fieldset.campo-docs { margin-bottom: 26px; }
   border: 1.5px solid var(--borda-forte); background: var(--superficie); color: var(--texto);
 }
 .modulo.atencao .rodando { background: var(--ambar, #E0A100); }
+
+/* ======================================================= Acessibilidade
+   Vale para o aplicativo inteiro (central.js, botão Acessibilidade do topo).
+   O tamanho do texto é um zoom da página toda: telas, diálogos e tabelas
+   crescem juntos, sem nada cortado. As outras opções são atributos no <html>. */
+
+.pular { position: fixed; left: 12px; top: -60px; z-index: 50; background: var(--primaria); color: #fff; font-weight: 600; padding: 10px 16px; border-radius: 10px; text-decoration: none; }
+.pular:focus { top: 10px; outline: 3px solid var(--verde-vivo); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+kbd { font: 600 12px var(--mono); background: var(--superficie-2); border: 1px solid var(--borda-forte); border-bottom-width: 2px; border-radius: 5px; padding: 0 5px; }
+
+.modal-titulo { margin: 0 0 4px; font-size: 20px; }
+.modal-caixa fieldset.campo { border: 0; padding: 0; margin: 0; min-width: 0; display: grid; gap: 8px; }
+.modal-caixa fieldset.campo > legend { font-weight: 600; font-size: 14px; padding: 0; margin-bottom: 8px; }
+.modal-caixa { max-height: calc(100vh / var(--acess-zoom, 1) - 32px); overflow: auto; }
+.atalhos-periodo { display: flex; flex-wrap: wrap; gap: 6px; }
+.btn[aria-pressed="true"] { background: var(--primaria-suave); border-color: var(--primaria); color: var(--primaria-escura); }
+.rel-avancado { border: 1px solid var(--borda); border-radius: 10px; padding: 0 14px; }
+.rel-avancado[open] { padding-bottom: 12px; }
+.rel-avancado > summary { cursor: pointer; font-weight: 600; font-size: 14px; padding: 11px 0; list-style-position: inside; }
+.rel-avancado > summary:focus-visible { outline: 3px solid var(--primaria); border-radius: 6px; }
+.rel-avancado .qtd { background: var(--borda); border-radius: 10px; padding: 0 7px; font-size: 11.5px; margin-left: 4px; }
+
+.acess-tamanhos { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.campo .acess-tam {
+  position: relative; display: grid; margin: 0; font-weight: 400; justify-items: center; gap: 2px; cursor: pointer; padding: 10px 6px;
+  border: 1.5px solid var(--borda-forte); border-radius: 10px; background: var(--superficie);
+}
+.acess-tam input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.acess-tam span { font-weight: 700; line-height: 1.2; }
+.acess-tam small { font-size: 12px; color: var(--texto-2); }
+.acess-tam:has(input:checked) { border-color: var(--primaria); background: var(--primaria-suave); box-shadow: inset 0 0 0 1px var(--primaria); }
+.acess-tam:has(input:focus-visible) { outline: 3px solid var(--primaria); outline-offset: 2px; }
+.campo .check.grande { display: flex; align-items: flex-start; gap: 12px; padding: 6px 0; margin: 0; font-weight: 400; }
+.check.grande input { margin-top: 2px; width: 20px; height: 20px; flex: none; }
+.check.grande span { display: grid; gap: 1px; }
+.check.grande b { font-weight: 600; }
+.check.grande small { color: var(--texto-2); font-size: 12.5px; }
+
+/* Sem animações: escolhido no aplicativo ou pedido pelo Windows */
+:root[data-acess-movimento] *, :root[data-acess-movimento] *::before, :root[data-acess-movimento] *::after {
+  animation: none !important; transition: none !important; scroll-behavior: auto !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+
+/* Mais espaço entre linhas */
+:root[data-acess-espaco] body { line-height: 1.85; letter-spacing: .015em; word-spacing: .06em; }
+:root[data-acess-espaco] p, :root[data-acess-espaco] li, :root[data-acess-espaco] small, :root[data-acess-espaco] .dica { line-height: 1.8; }
+
+/* Destacar o foco e os links */
+:root[data-acess-foco] :focus-visible, :root[data-acess-foco] .acess-tam:has(input:focus-visible) {
+  outline: 4px solid #FFD400 !important; outline-offset: 2px !important; box-shadow: 0 0 0 7px #111 !important;
+}
+:root[data-acess-foco] a, :root[data-acess-foco] .link-pasta { text-decoration: underline !important; text-underline-offset: 3px; }
+
+/* Alto contraste: preto, branco e uma cor de ação, com bordas fortes */
+:root[data-acess-contraste] {
+  --fundo: #FFFFFF; --superficie: #FFFFFF; --superficie-2: #F2F2F2;
+  --borda: #000000; --borda-forte: #000000;
+  --texto: #000000; --texto-2: #000000; --texto-3: #1F1F1F;
+  --lateral: #000000; --lateral-2: #000000; --lateral-texto: #FFFFFF;
+  --primaria: #003D99; --primaria-escura: #002766; --primaria-suave: #DCE8FF;
+  --verde: #005C2E; --verde-suave: #DFF5E8; --ambar: #6B3E00; --ambar-suave: #FFF0CC; --ambar-borda: #6B3E00;
+  --vermelho: #9E0000; --vermelho-suave: #FFE5E5;
+  --sombra: none;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-acess-contraste]:not([data-theme="light"]) {
+    --fundo: #000000; --superficie: #000000; --superficie-2: #141414;
+    --borda: #FFFFFF; --borda-forte: #FFFFFF;
+    --texto: #FFFFFF; --texto-2: #FFFFFF; --texto-3: #E6E6E6;
+    --primaria: #8EC5FF; --primaria-escura: #B8DAFF; --primaria-suave: #0A2A4D;
+    --verde: #6CF0A8; --verde-suave: #062B18; --ambar: #FFD166; --ambar-suave: #2E2200; --ambar-borda: #FFD166;
+    --vermelho: #FF8A8A; --vermelho-suave: #330000;
+  }
+}
+:root[data-acess-contraste][data-theme="dark"] {
+  --fundo: #000000; --superficie: #000000; --superficie-2: #141414; --borda: #FFFFFF; --borda-forte: #FFFFFF;
+  --texto: #FFFFFF; --texto-2: #FFFFFF; --texto-3: #E6E6E6; --primaria: #8EC5FF; --primaria-escura: #B8DAFF; --primaria-suave: #0A2A4D;
+}
+:root[data-acess-contraste] .btn, :root[data-acess-contraste] .cartao, :root[data-acess-contraste] .doc,
+:root[data-acess-contraste] input, :root[data-acess-contraste] select, :root[data-acess-contraste] textarea { border-width: 2px !important; border-color: var(--borda-forte) !important; }
+:root[data-acess-contraste] .btn.primario { color: var(--fundo); }
+:root[data-acess-contraste] .menu-btn, :root[data-acess-contraste] .ano-sigef select { border: 2px solid var(--borda-forte); }
+:root[data-acess-contraste] .modulo, :root[data-acess-contraste] .link-lateral { color: #FFFFFF; }
+:root[data-acess-contraste] .modulo.ativo { outline: 2px solid #FFFFFF; outline-offset: -2px; }
+:root[data-acess-contraste] .topo-app { border-bottom: 2px solid var(--borda-forte); }
+:root[data-acess-contraste] .conteudo :is(.nota, .dica, small), :root[data-acess-contraste] .modal :is(.nota, .dica, small), :root[data-acess-contraste] .topo-app small { color: var(--texto-2) !important; opacity: 1 !important; }
+:root[data-acess-contraste] .lateral small, :root[data-acess-contraste] .marca-sub, :root[data-acess-contraste] .lateral .versao { opacity: 1; color: #FFFFFF; }
+:root[data-acess-contraste] .modal { background: rgba(0, 0, 0, .75); }
+:root[data-acess-contraste] .modal-caixa { border: 3px solid var(--borda-forte); }

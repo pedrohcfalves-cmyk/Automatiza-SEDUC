@@ -45,6 +45,11 @@ PPS = {
 
 
 class _Download:
+    url = "http://sigef/pdf"
+
+    def failure(self):
+        return None
+
     def save_as(self, caminho):
         with open(caminho, "wb") as arquivo:
             arquivo.write(b"%PDF-falso")
@@ -73,8 +78,8 @@ class _Locator:
         return _Locator(self.pagina, self.seletor, self.filtro, i)
 
     # ações
-    def fill(self, *a, **k):
-        pass
+    def fill(self, valor, *a, **k):
+        self.pagina.ctx.preenchidos.append((self.pagina.url, self.seletor, valor))
 
     def select_option(self, *a, **k):
         pass
@@ -158,6 +163,8 @@ class _Contexto:
         self.pages = []
         self.eventos = []
         self.ultimo_clique = None
+        self.falhar_impressao_ce = False
+        self.preenchidos = []
         self.browser = types.SimpleNamespace(is_connected=lambda: True)
 
     def registrar(self, *evento):
@@ -166,6 +173,8 @@ class _Contexto:
     def _nova_pagina(self):
         clique = self.ultimo_clique
         sel = clique.seletor
+        if "Gerar Relatório" in sel and self.falhar_impressao_ce and "DespesaCertificada" in clique.pagina.url:
+            raise baixar.PlaywrightTimeoutError("Timeout 30000ms exceeded (simulado)")
         if "Gerar Relatório" in sel:
             pagina = _Pagina(self, "formato:" + clique.pagina.nome, "http://sigef/formato")
         elif "dtgListarOrdemBancaria" in sel:
@@ -195,13 +204,16 @@ class _Contexto:
         info.value = _Download()
 
 
-def _simular_download(documentos, reaproveitar=False):
+def _simular_download(documentos, reaproveitar=False, ce_impressao=False, falhar_impressao_ce=False):
     ctx = _Contexto()
+    ctx.falhar_impressao_ce = falhar_impressao_ce
     aba = _Pagina(ctx, "principal", baixar.URL_SIGEF_LISTAR_OB)
     ctx.pages.append(aba)
     dados = baixar.baixar_documentos(
-        ctx, aba, "0029.001947/2026-67", OB, documentos=documentos, reaproveitar=reaproveitar
+        ctx, aba, "0029.001947/2026-67", OB, documentos=documentos, reaproveitar=reaproveitar,
+        ce_impressao=ce_impressao,
     )
+    _simular_download.preenchidos = ctx.preenchidos
     return dados, ctx.eventos
 
 
@@ -409,6 +421,118 @@ class TestaSei(unittest.TestCase):
                                   conferir_no_fim=False, documentos=["CE"])
         finally:
             PPS = guardado
+
+
+class TestaCeImpressao(unittest.TestCase):
+    """A opção "Como listar e imprimir a CE" -> tela Imprimir Despesa Certificada."""
+
+    def setUp(self):
+        baixar.salvar_sessao(download_completo=False)
+        # As CEs de mentira são de 2026: o teste não pode depender do ano do relógio.
+        self._ano = baixar.ano_sigef
+        baixar.ano_sigef = lambda: 2026
+
+    def tearDown(self):
+        baixar.ano_sigef = self._ano
+
+    def _impressoes_ce(self, eventos):
+        """Os valores digitados na tela de impressão da CE, por seletor."""
+        return [(sel, valor) for url, sel, valor in _simular_download.preenchidos
+                if "FINImprimirDespesaCertificadaSituacao" in url]
+
+    def test_sequencial(self):
+        f = baixar.sequencial_ce_para_impressao
+        self.assertEqual(f("2026CE001234"), "001234")
+        self.assertEqual(f(" 2026ce12 "), "000012")
+        self.assertIsNone(f("2025CE001234"))      # outro exercício: viria a CE errada
+        self.assertIsNone(f("2026CE1234567"))     # o campo só tem 6 dígitos
+        self.assertIsNone(f("001234"))
+        self.assertIsNone(f(""))
+        self.assertIsNone(f(None))
+
+    def test_imprime_cada_ce_uma_vez_pela_tela_nova(self):
+        dados, eventos = _simular_download(None, ce_impressao=True)
+        self.assertEqual(_baixados(dados), ESPERADO_TUDO)
+        # Não clica no campo da CE da PP...
+        self.assertNotIn(("abrir", "CE"), eventos)
+        # ...e preenche a tela nova uma vez só (a CE se repete nas PPs 1 e 2).
+        self.assertEqual(self._impressoes_ce(eventos), [
+            ("#txtCdUnidadeGestora", "160001"),
+            ("#txtCdGestao_SIGEFPesquisa", "1"),
+            ("#txtDespesaCertificadaNumero_SIGEFPesquisa", "000010"),
+        ])
+        jpg = dados["grupos_ce"][0][1]
+        self.assertEqual(dados["grupos_ce"], [("2026CE000010", jpg)])
+        self.assertTrue(jpg[0].endswith("Despesa Certificada - CE 2026CE000010.jpg"))
+        lanc = dados["lancamentos"]
+        self.assertEqual([i["arquivos_ce"] for i in lanc], [jpg, jpg, []])
+        self.assertEqual(lanc[0]["arquivos_anexar"][0], jpg[0])
+        self.assertEqual(dados["avisos_download"], [])
+
+    def test_mesmos_arquivos_do_caminho_de_sempre(self):
+        normal, _ = _simular_download(None)
+        nova, _ = _simular_download(None, ce_impressao=True)
+        for chave in ("grupos_ce", "arquivos_ob", "documentos"):
+            self.assertEqual(normal[chave], nova[chave], chave)
+        tirar = lambda d: [{k: v for k, v in i.items()} for i in d["lancamentos"]]  # noqa: E731
+        self.assertEqual(tirar(normal), tirar(nova))
+
+    def test_ce_desmarcada_nao_imprime_nada(self):
+        dados, eventos = _simular_download(["NL", "PP", "OB"], ce_impressao=True)
+        self.assertEqual(self._impressoes_ce(eventos), [])
+        self.assertEqual(dados["grupos_ce"], [])
+
+    def test_ce_de_outro_exercicio_vai_pelo_caminho_de_sempre(self):
+        baixar.ano_sigef = lambda: 2027
+        dados, eventos = _simular_download(None, ce_impressao=True)
+        self.assertEqual(self._impressoes_ce(eventos), [])
+        self.assertEqual(eventos.count(("abrir", "CE")), 1)
+        self.assertEqual(_baixados(dados), ESPERADO_TUDO)
+
+    def test_falha_pula_so_a_ce_avisa_e_grava_diagnostico(self):
+        antes = set(os.listdir(baixar.PASTA_DIAGNOSTICO_CE)) if os.path.isdir(baixar.PASTA_DIAGNOSTICO_CE) else set()
+        dados, eventos = _simular_download(None, ce_impressao=True, falhar_impressao_ce=True)
+        self.assertEqual(_baixados(dados), {**ESPERADO_TUDO, "CE": 0})
+        self.assertEqual(len(dados["avisos_download"]), 1)
+        self.assertIn("CE 2026CE000010", dados["avisos_download"][0])
+        self.assertIn("NÃO foi anexada", dados["avisos_download"][0])
+        novos = set(os.listdir(baixar.PASTA_DIAGNOSTICO_CE)) - antes
+        relatorio = [n for n in novos if n.endswith(".txt")]
+        self.assertEqual(len(relatorio), 1)
+        with open(os.path.join(baixar.PASTA_DIAGNOSTICO_CE, relatorio[0]), encoding="utf-8") as arq:
+            texto = arq.read()
+        self.assertIn("clicar em Imprimir", texto)
+        self.assertIn("#txtDespesaCertificadaNumero_SIGEFPesquisa", texto)
+        with open(baixar.ARQUIVO_DIAGNOSTICO_CE, encoding="utf-8") as arq:
+            self.assertIn("FALHOU", arq.read())
+        # Nenhum "temp_ce.pdf" sobrando na pasta do processo.
+        self.assertFalse(os.path.exists(os.path.join(dados["pasta_processo"], "temp_ce.pdf")))
+
+    def test_reaproveita_o_download_feito_pela_tela_nova(self):
+        _simular_download(None, ce_impressao=True)
+        pronto = baixar.download_ja_feito("0029.001947/2026-67", OB, None)
+        self.assertEqual(_baixados(pronto), ESPERADO_TUDO)
+
+    def test_sei_anexa_na_ordem_de_sempre(self):
+        dados, _ = _simular_download(None, ce_impressao=True)
+        chamadas = []
+        originais = (sei._anexar_documento, sei.obter_ou_criar_aba, sei.abrir_processo_sei,
+                     sei._aguardar_rede, sei._procurar_lugar)
+        sei._anexar_documento = lambda ctx, aba, prog, avisos, chave, *a, **k: chamadas.append(chave)
+        sei.obter_ou_criar_aba = lambda *a, **k: types.SimpleNamespace(bring_to_front=lambda: None)
+        sei.abrir_processo_sei = lambda *a, **k: None
+        sei._aguardar_rede = lambda *a, **k: None
+        sei._procurar_lugar = lambda *a, **k: (None, None, None)
+        try:
+            sei.executar_sei2(None, "0029.001947/2026-67", dados=dados, tipo_ob="OB - x",
+                              conferir_no_fim=False, documentos=None)
+        finally:
+            (sei._anexar_documento, sei.obter_ou_criar_aba, sei.abrir_processo_sei,
+             sei._aguardar_rede, sei._procurar_lugar) = originais
+        self.assertEqual(chamadas, [
+            "CE 2026CE000010", "NL 2026PP000001", "NL 2026PP000002",
+            "PP 2026PP000001", "PP 2026PP000002", "PP 2026PP000003", "OB",
+        ])
 
 
 if __name__ == "__main__":

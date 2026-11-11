@@ -31,6 +31,26 @@ import time
 import traceback
 
 
+# ------------------------------------- O processo da automação do Anexar Documentos
+# No programa instalado (PyInstaller) não existe "python -m": o módulo Anexar Documentos abre
+# este mesmo .exe de novo com --executor para rodar a automação num processo separado (ver
+# automacoes/anexar/aplicativo/nucleo.py). Isso precisa vir antes de tudo: esse processo não
+# tem janela, e a saída dele é o canal de conversa com a Central.
+
+if __name__ == "__main__" and sys.argv[1:2] == ["--executor"]:
+    if getattr(sys, "frozen", False):
+        # Um .exe sem console começa sem entrada/saída: usa as que a Central passou (0, 1 e 2).
+        for _nome, _descritor, _modo in (("stdin", 0, "r"), ("stdout", 1, "w"), ("stderr", 2, "w")):
+            if getattr(sys, _nome, None) is None:
+                try:
+                    setattr(sys, _nome, open(_descritor, _modo, encoding="utf-8", errors="replace", closefd=False))
+                except OSError:
+                    setattr(sys, _nome, open(os.devnull, _modo, encoding="utf-8"))
+    from automacoes.anexar.aplicativo.executor import main as _executar
+
+    sys.exit(_executar(sys.argv[2:]))
+
+
 # ---------------------------------------------------------------- Pastas
 
 # Onde estão index.html, css e js: dentro do pacote, quando instalado.
@@ -152,11 +172,9 @@ from automacoes.sigef_sei.etapa_listar_baixar import (  # noqa: E402
 from automacoes.sigef_sei import etapa_sei2  # noqa: E402
 from automacoes.sigef_sei.documentos import DOCUMENTOS, normalizar_documentos  # noqa: E402
 from automacoes.sigef_sei import metricas  # noqa: E402
-from automacoes.sigef_sei import relatorio_gerencial  # noqa: E402
 from janela import modulos_janela  # noqa: E402
 from janela import licenca  # noqa: E402
 from janela import cache_janela  # noqa: E402
-from datetime import date  # noqa: E402
 
 # Preferências que valem entre uma abertura e outra (ex.: o tempo manual
 # por OB usado no relatório gerencial).
@@ -184,10 +202,8 @@ gravar_registro_em(PASTA_BASE)
 from automacoes.sigef_sei import lote  # noqa: E402
 from main import VERSAO  # noqa: E402
 from automacoes.sigef_sei.preparar_navegador import (  # noqa: E402
-    DOMINIO_BB,
     DOMINIO_SEI,
     DOMINIO_SIGEF,
-    URL_BB_LOGIN,
     URL_SEI,
     URL_SIGEF_LISTAR_OB,
     URL_SIGEF_PORTAL,
@@ -206,6 +222,22 @@ TIPOS_OB = {
 
 def _chave_do_tipo(texto: str) -> str:
     return next((chave for chave, nome in TIPOS_OB.items() if nome == texto), "regularizacao")
+
+
+# De onde sai a CE (passo 3): "pp" é o caminho de sempre (o campo da CE na
+# tela da PP); "impressao" é a tela "Imprimir Despesa Certificada".
+MODOS_CE = ("pp", "impressao")
+
+
+def _modo_ce(valor) -> str:
+    return valor if valor in MODOS_CE else "pp"
+
+
+def _lembrar_modo_ce(valor) -> str:
+    """A escolha válida (desconhecida ou ausente = "pp"), gravada para a próxima vez."""
+    modo = _modo_ce(valor)
+    _gravar_config(modo_ce=modo)
+    return modo
 
 
 # --------------------------------------------- input() vira pergunta na tela
@@ -270,10 +302,11 @@ class Trabalhador(threading.Thread):
     A única thread que fala com o Chrome. Espera comandos da janela e
     executa um de cada vez:
 
-        conectar          abre o Chrome da automação e as duas abas
+        conectar          abre o Chrome da automação e as abas do SIGEF e do SEI (só elas)
         apos_login        leva a aba do SIGEF do portal para a tela da OB
         processar         baixa uma OB no SIGEF e anexa no SEI
         lote              faz o mesmo para uma lista de OBs (lote.py)
+        ne_*              os da Nota de Empenho (janela/modulo_ne.py, executar)
         sair              solta a conexão e termina
     """
 
@@ -293,22 +326,26 @@ class Trabalhador(threading.Thread):
             if comando == "sair":
                 break
             # Baixar/anexar mexe no Chrome: não roda junto com o BB nem com o DARE.
-            usa_chrome = comando in ("processar", "lote")
+            usa_chrome = comando in ("processar", "lote", "ne_processar", "ne_lote")
+            ne = comando.startswith("ne_")
             if usa_chrome and not modulos_janela.USO_DO_CHROME.acquire(blocking=False):
                 ponte.emitir(
-                    "erro", fase=comando,
+                    "ne_erro" if ne else "erro", fase=comando,
                     mensagem="Outra automação (BB ou DARE) está usando o Chrome agora. "
                              "Espere ela terminar e clique em “Continuar de onde parou”.",
                 )
                 continue
             try:
-                getattr(self, f"_{comando}")(**argumentos)
+                if ne:  # a NE tem a página e os eventos dela: nada vai para a tela da OB
+                    _modulo_ne().executar(self, comando, **argumentos)
+                else:
+                    getattr(self, f"_{comando}")(**argumentos)
             except Encerrado:
                 break
             except BaseException as erro:  # SystemExit é o jeito das etapas pararem
                 if not isinstance(erro, SystemExit):
                     print(traceback.format_exc())
-                ponte.emitir("erro", fase=comando, mensagem=_mensagem_de(erro))
+                ponte.emitir("ne_erro" if ne else "erro", fase=comando, mensagem=_mensagem_de(erro))
             finally:
                 if usa_chrome:
                     modulos_janela.USO_DO_CHROME.release()
@@ -327,13 +364,7 @@ class Trabalhador(threading.Thread):
         # dá o alerta de "sessão expirada" (ver automacoes/sigef_sei/preparar_navegador.py).
         self.aba_sigef = abrir_ou_reusar_aba(self.context, DOMINIO_SIGEF, URL_SIGEF_PORTAL, "SIGEF")
         abrir_ou_reusar_aba(self.context, DOMINIO_SEI, URL_SEI, "SEI")
-        # O portal do BB (módulo Banco do Brasil) abre junto, já na entrada
-        # com chave J. Se o BB estiver fora do ar, só avisa: SIGEF e SEI
-        # seguem normalmente.
-        try:
-            abrir_ou_reusar_aba(self.context, DOMINIO_BB, URL_BB_LOGIN, "Banco do Brasil")
-        except Exception as erro:
-            print(f"   ⚠️  Não consegui abrir o portal do BB agora ({erro}) -- abra depois, se for usar o módulo BB.")
+        # Só as abas que a OB e a NE usam: o BB abre a dele quando for usado (modulo_geral, abrir_abas).
         try:
             self.aba_sigef.bring_to_front()
         except Exception:
@@ -356,7 +387,7 @@ class Trabalhador(threading.Thread):
             print("O navegador da automação tinha sido fechado -- abrindo de novo.")
             self._conectar()
 
-    def _processar(self, processo: str, ob: str, tipo_ob: str, documentos=None) -> None:
+    def _processar(self, processo: str, ob: str, tipo_ob: str, documentos=None, ce_impressao=False) -> None:
         self._garantir_conexao()
 
         salvar_sessao(processo=processo, ob=ob, tipo_ob=tipo_ob)
@@ -367,7 +398,9 @@ class Trabalhador(threading.Thread):
         try:
             cron.etapa("sigef")
             ponte.emitir("etapa", etapa="sigef")
-            dados = baixar_documentos(self.context, self.aba_sigef, processo, ob, documentos=documentos)
+            dados = baixar_documentos(
+                self.context, self.aba_sigef, processo, ob, documentos=documentos, ce_impressao=ce_impressao
+            )
             ponte.emitir("resumo", resumo=_resumo(dados))
 
             cron.etapa("sei")
@@ -387,7 +420,7 @@ class Trabalhador(threading.Thread):
         tempos = cron.registrar("ok", dados=dados)
         ponte.emitir("concluido", processo=processo, ob=dados.get("ob", ob), tempos=tempos)
 
-    def _lote(self, itens: list, documentos=None) -> None:
+    def _lote(self, itens: list, documentos=None, ce_impressao=False) -> None:
         self._garantir_conexao()
         self.parar_lote.clear()
         validos = [item for item in itens if item.valido]
@@ -409,7 +442,7 @@ class Trabalhador(threading.Thread):
         resultados, relatorio = lote.processar_lote(
             self.context, self.aba_sigef, validos,
             ao_mudar=ao_mudar, deve_parar=self.parar_lote.is_set, ao_etapa=ao_etapa,
-            documentos=documentos,
+            documentos=documentos, ce_impressao=ce_impressao,
         )
         ponte.emitir(
             "lote_fim", relatorio=relatorio,
@@ -480,6 +513,61 @@ def _modulo_dare():
     return _dare["modulo"]
 
 
+_ne = {"modulo": None}
+_geral = {"modulo": None}
+_cadastro = {"modulo": None}
+_anexar = {"modulo": None}
+
+
+def _modulo_cadastro():
+    """O Cadastro de Credores (janela/modulo_cadastro.py), importado e ligado à janela na 1ª vez."""
+    if _cadastro["modulo"] is None:
+        from janela import modulo_cadastro
+
+        modulo_cadastro.configurar(ponte.emitir, lambda: ponte.janela)
+        _cadastro["modulo"] = modulo_cadastro
+    return _cadastro["modulo"]
+
+
+def _modulo_anexar():
+    """O Anexar Documentos (janela/modulo_anexar.py), importado e ligado à janela na 1ª vez."""
+    if _anexar["modulo"] is None:
+        from janela import modulo_anexar
+
+        modulo_anexar.configurar(lambda: ponte.janela)
+        _anexar["modulo"] = modulo_anexar
+    return _anexar["modulo"]
+
+
+def _modulo_geral():
+    """Ano do SIGEF e painel de resultados (janela/modulo_geral.py), carregados na 1ª vez."""
+    if _geral["modulo"] is None:
+        from janela import modulo_geral
+
+        modulo_geral.configurar(lambda: ponte.janela)
+        _geral["modulo"] = modulo_geral
+    return _geral["modulo"]
+
+
+def _esperar_resposta() -> str:
+    """Espera a página responder (a conferência da NE); janela fechada interrompe."""
+    resposta = _respostas.get()
+    if resposta is None:
+        raise Encerrado()
+    return resposta
+
+
+def _modulo_ne():
+    """O módulo Nota de Empenho (janela/modulo_ne.py), importado e ligado à janela na 1ª vez."""
+    if _ne["modulo"] is None:
+        from janela import modulo_ne
+
+        modulo_ne.configurar(ponte.emitir, lambda: ponte.janela, trabalhador, _esperar_resposta,
+                             _respostas.put, _ler_config, _gravar_config)
+        _ne["modulo"] = modulo_ne
+    return _ne["modulo"]
+
+
 # --------------------------------------------- O que a janela pode chamar
 
 
@@ -495,6 +583,7 @@ class Api:
             "ob": sessao.get("ob") or "",
             "tipo_ob": _chave_do_tipo(sessao.get("tipo_ob")),
             "tipos_ob": TIPOS_OB,
+            "modo_ce": _modo_ce(_ler_config().get("modo_ce")),
         }
 
     def __init__(self):
@@ -524,7 +613,7 @@ class Api:
             return None
         return normalizar_documentos(documentos)
 
-    def processar(self, processo: str, ob: str, tipo_ob: str = None, documentos=None) -> dict:
+    def processar(self, processo: str, ob: str, tipo_ob: str = None, documentos=None, modo_ce=None) -> dict:
         normalizado = normalizar_processo_sei(processo or "")
         ob = (ob or "").strip().upper()
         if not normalizado:
@@ -536,12 +625,13 @@ class Api:
         escolhidos = self._documentos_escolhidos(documentos)
         if not escolhidos:
             return {"ok": False, "campo": "documentos"}
+        modo_ce = _lembrar_modo_ce(modo_ce)
         trabalhador.comandos.put(
             ("processar", {"processo": normalizado, "ob": ob, "tipo_ob": TIPOS_OB[tipo_ob],
-                           "documentos": list(escolhidos)})
+                           "documentos": list(escolhidos), "ce_impressao": modo_ce == "impressao"})
         )
         return {"ok": True, "processo": normalizado, "ob": ob, "tipo_ob": tipo_ob,
-                "documentos": list(escolhidos)}
+                "documentos": list(escolhidos), "modo_ce": modo_ce}
 
     # ---- lote ----
 
@@ -578,7 +668,7 @@ class Api:
     def reler_lote(self, tipo_padrao: str) -> dict:
         return self._ler(tipo_padrao)
 
-    def processar_lote(self, somente_linhas=None, documentos=None) -> dict:
+    def processar_lote(self, somente_linhas=None, documentos=None, modo_ce=None) -> dict:
         """
         Roda a última lista lida. `somente_linhas` refaz só essas (os que
         deram erro). `documentos`: as caixas CE/NL/PP/OB marcadas.
@@ -596,7 +686,9 @@ class Api:
             item.ja_concluida = etapa_sei2.ob_ja_concluida(item.processo, item.ob)
         if not itens:
             return {"ok": False}
-        trabalhador.comandos.put(("lote", {"itens": itens, "documentos": list(escolhidos)}))
+        modo_ce = _lembrar_modo_ce(modo_ce)
+        trabalhador.comandos.put(("lote", {"itens": itens, "documentos": list(escolhidos),
+                                           "ce_impressao": modo_ce == "impressao"}))
         return {"ok": True, "quantidade": len(itens)}
 
     def parar_lote(self) -> None:
@@ -669,36 +761,40 @@ class Api:
         except Exception as erro:
             return self._erro_modulo(erro)
 
-    # ---- relatório gerencial ----
+    # ---- Para todas as abas: ano do SIGEF e painel de resultados ----
+    # A barra lateral (interface/central.js) chama geral("acao", {...}).
 
-    def opcoes_relatorio(self) -> dict:
-        """Valores para abrir a caixa do relatório: mês corrente e o último tempo manual usado."""
-        hoje = date.today()
-        return {
-            "de": hoje.replace(day=1).isoformat(),
-            "ate": hoje.isoformat(),
-            "minutos_manual": _ler_config().get("minutos_manual_por_ob", 20),
-        }
+    def geral(self, acao: str, dados: dict = None) -> dict:
+        try:
+            return _modulo_geral().chamar(acao, dados or {})
+        except Exception as erro:
+            return self._erro_modulo(erro)
 
-    def gerar_relatorio(self, de: str, ate: str, minutos_manual) -> dict:
+    # ---- Nota de Empenho ----
+    # O mesmo jeito do DARE: a página NE (interface/ne.js) chama ne("acao", {...}).
+
+    def ne(self, acao: str, dados: dict = None) -> dict:
         try:
-            minutos = float(str(minutos_manual).replace(",", "."))
-            if minutos <= 0:
-                raise ValueError
-        except (TypeError, ValueError):
-            return {"ok": False, "erro": "Informe quantos minutos leva uma OB feita à mão (ex.: 20)."}
+            return _modulo_ne().chamar(acao, dados or {})
+        except Exception as erro:
+            return self._erro_modulo(erro)
+
+    # ---- Cadastro de Credores e Anexar Documentos ----
+    # O mesmo jeito do DARE: a página (interface/cadastro.js, interface/anexar.js) chama
+    # cadastro("acao", {...}) / anexar("acao", {...}).
+
+    def cadastro(self, acao: str, dados: dict = None) -> dict:
         try:
-            inicio, fim = date.fromisoformat(de), date.fromisoformat(ate)
-        except (TypeError, ValueError):
-            return {"ok": False, "erro": "Confira as datas do período."}
-        _gravar_config(minutos_manual_por_ob=minutos)
+            return _modulo_cadastro().chamar(acao, dados or {})
+        except Exception as erro:
+            return self._erro_modulo(erro)
+
+    def anexar(self, acao: str, dados: dict = None) -> dict:
         try:
-            caminho = relatorio_gerencial.gerar(inicio, fim, minutos)
-        except Exception as erro:  # planilha de métricas travada/corrompida
-            print(traceback.format_exc())
-            return {"ok": False, "erro": f"Não consegui montar o relatório: {erro}"}
-        os.startfile(caminho)
-        return {"ok": True, "caminho": caminho}
+            return _modulo_anexar().chamar(acao, dados or {})
+        except Exception as erro:
+            return self._erro_modulo(erro)
+    # O relatório (de todas as automações) é o Relatório geral: Api.geral -> janela/modulo_geral.py.
 
 
 HTML_ATIVACAO = """<!doctype html><html lang="pt-br"><head><meta charset="utf-8">
@@ -759,20 +855,32 @@ def _titulo_com_licenca(situacao: dict) -> str:
     return titulo
 
 
+# Fechar a janela com uma destas automações trabalhando pede confirmação (como os
+# aplicativos originais faziam): o que dizer sobre cada uma.
+_AVISOS_AO_FECHAR = (
+    (_dare, "Há lançamentos do DARE sendo processados agora.\n\n"
+            "Se fechar, o lançamento atual pode ficar pela metade. Os que não foram concluídos "
+            "ficam guardados como pendentes."),
+    (_cadastro, "O cadastro de credores ainda está acontecendo.\n\n"
+                "Se fechar agora, a pessoa atual pode ficar pela metade no SIGEF."),
+    (_anexar, "O Anexar Documentos está trabalhando.\n\n"
+              "Se fechar agora, ele será parado (tudo o que já foi feito fica guardado)."),
+)
+
+
 def _confirmar_fechar() -> bool:
     """
-    Fechar a janela com o DARE processando: pergunta antes, como o aplicativo
-    DARE fazia. False cancela o fechamento (evento "closing" do pywebview, que
+    Fechar a janela com o DARE, o Cadastro ou o Anexar trabalhando: pergunta antes, como os
+    aplicativos deles faziam. False cancela o fechamento (evento "closing" do pywebview, que
     roda na thread da janela -- por isso a caixa nativa do Windows).
     """
-    modulo = _dare["modulo"]
-    if modulo is None or not modulo.executando() or os.name != "nt":
+    avisos = [texto for guardado, texto in _AVISOS_AO_FECHAR
+              if guardado["modulo"] is not None and guardado["modulo"].executando()]
+    if not avisos or os.name != "nt":
         return True
     import ctypes
 
-    texto = ("Há lançamentos do DARE sendo processados agora.\n\n"
-             "Se fechar, o lançamento atual pode ficar pela metade. Os que não foram concluídos "
-             "ficam guardados como pendentes.\n\nFechar mesmo assim?")
+    texto = "\n\n".join(avisos) + "\n\nFechar mesmo assim?"
     # MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2 | MB_TASKMODAL; IDYES = 6
     try:
         return ctypes.windll.user32.MessageBoxW(None, texto, "Central de Automações", 0x4 | 0x30 | 0x100 | 0x2000) == 6
@@ -883,6 +991,12 @@ def main() -> None:
     # Janela fechada: destrava quem estiver esperando resposta e solta o
     # Chrome. O Chrome em si continua aberto, como no main.py.
     _respostas.put(None)
+    for guardado in (_cadastro, _anexar):  # destrava perguntas abertas e para o executor do Anexar
+        if guardado["modulo"] is not None:
+            try:
+                guardado["modulo"].encerrar()
+            except Exception:
+                pass
     if trabalhador.is_alive():
         trabalhador.comandos.put(("sair", {}))
         trabalhador.join(timeout=3)
