@@ -44,6 +44,8 @@ from playwright.sync_api import (
     TimeoutError as PlaywrightTimeoutError,
 )
 
+from automacoes.geral import url_sigef
+
 
 # Acentos e emojis na tela preta do Windows. O errors="replace" evita
 # que um caractere fora da fonte do console derrube o programa.
@@ -82,10 +84,8 @@ URL_SIGEF_PORTAL = "http://sigef.sefin.ro.gov.br/SIGEF/SIGEFPortal.html"
 
 # Tela de destino, pra onde a aba do SIGEF é redirecionada DEPOIS que o
 # usuário confirma que já entrou.
-URL_SIGEF_LISTAR_OB = (
-    "http://sigef.sefin.ro.gov.br/SIGEF2026/FIN/"
-    "FINListarOrdemBancaria.aspx?CdTransacao=175"
-)
+# O exercício (o "2026" de .../SIGEF2026/...) vem de automacoes/geral.py.
+URL_SIGEF_LISTAR_OB = url_sigef("FIN/FINListarOrdemBancaria.aspx?CdTransacao=175")
 
 URL_SEI = "https://sei.sistemas.ro.gov.br/sei/controlador.php?acao=procedimento_controlar"
 
@@ -100,6 +100,10 @@ URL_BB_LOGIN = (
 DOMINIO_SIGEF = "sigef.sefin.ro.gov.br"
 DOMINIO_SEI = "sei.sistemas.ro.gov.br"
 DOMINIO_BB = "bb.com.br"   # autoatendimento, autoatendimento2...: qualquer host do BB
+
+# Sites http que o Chrome da automação trata como seguros (ver
+# abrir_chrome_debug): produção e homologação do SIGEF.
+ORIGENS_HTTP_CONFIAVEIS = "http://sigef.sefin.ro.gov.br,http://sigefhom.sefin.ro.gov.br"
 
 
 # ===================== Conversa com o usuário (tela preta) =====================
@@ -190,6 +194,13 @@ def abrir_chrome_debug(porta: int, urls=()) -> None:
         # Salvar; quando o SEI demora, o Chrome bloqueia esse popup e o
         # documento fica criado, em branco, sem editor.
         "--disable-popup-blocking",
+        # O SIGEF é http (sem cadeado): o Chrome bloqueia os downloads dele
+        # ("Insecure download blocked"). Tratar o SIGEF como origem segura
+        # tira o bloqueio na raiz; o aviso de download inseguro sai junto.
+        # Só vale na hora em que o Chrome abre -- um Chrome já aberto sem
+        # estas opções precisa ser fechado e aberto de novo pelo programa.
+        f"--unsafely-treat-insecure-origin-as-secure={ORIGENS_HTTP_CONFIAVEIS}",
+        "--disable-features=InsecureDownloadWarnings",
     ]
     comando += list(urls)
 
@@ -259,7 +270,7 @@ def instalar_tratador_dialogos(context) -> None:
     context.on("page", lambda pagina: pagina.on("dialog", _tratador_dialogo))
 
 
-def conectar_chrome(porta: int = PORTA_PADRAO, timeout_ms: int = 60000):
+def conectar_chrome(porta: int = PORTA_PADRAO, timeout_ms: int = 60000, urls=None):
     """
     Conecta no Chrome da automação, abrindo-o se ninguém estiver na porta.
 
@@ -270,7 +281,7 @@ def conectar_chrome(porta: int = PORTA_PADRAO, timeout_ms: int = 60000):
 
     if not porta_ja_esta_em_uso(porta):
         print("🌐 Abrindo o navegador da automação...")
-        abrir_chrome_debug(porta, urls=[URL_SIGEF_PORTAL, URL_SEI])
+        abrir_chrome_debug(porta, urls=urls or [URL_SIGEF_PORTAL, URL_SEI])
         time.sleep(3)
     else:
         print("🌐 O navegador da automação já estava aberto -- reaproveitando.")
@@ -399,6 +410,31 @@ def abrir_ou_reusar_aba(context, dominio: str, url: str, apelido: str):
     return aba
 
 
+def abrir_abas_sem_conectar(abas, porta: int = PORTA_PADRAO) -> None:
+    """
+    Deixa o Chrome da automação aberto com as abas pedidas -- [(dominio, url), ...] --
+    e só elas: o que já estiver aberto num desses sites é reaproveitado, o resto do
+    Chrome não é tocado. Usa o endereço de depuração do Chrome (/json), sem o Playwright,
+    para poder ser chamada da janela enquanto outra automação fala com o Chrome.
+    """
+    import json
+    import urllib.parse
+    import urllib.request
+
+    if not porta_ja_esta_em_uso(porta):
+        abrir_chrome_debug(porta, urls=[url for _, url in abas])
+        return
+    base = f"http://127.0.0.1:{porta}/json"
+    with urllib.request.urlopen(f"{base}/list", timeout=5) as resposta:
+        abertas = [a.get("url", "").lower() for a in json.load(resposta) if a.get("type") == "page"]
+    for dominio, url in abas:
+        if not any(dominio.lower() in u for u in abertas):
+            # Desde o Chrome 111, /json/new só aceita PUT. O endereço vai todo codificado: sem isso
+            # o Chrome corta no "&" e o urllib no "#" (e o BB precisa dos dois).
+            pedido = urllib.request.Request(f"{base}/new?{urllib.parse.quote(url, safe='')}", method="PUT")
+            urllib.request.urlopen(pedido, timeout=10).close()
+
+
 # ===================== Apresentação do programa =====================
 
 
@@ -513,14 +549,18 @@ def _instrucoes_login() -> None:
 # ===================== O fluxo completo =====================
 
 
-def preparar_navegador(porta: int = PORTA_PADRAO):
+def preparar_navegador(porta: int = PORTA_PADRAO, url_destino: str = URL_SIGEF_LISTAR_OB, apresentacao=None):
     """
     Devolve (playwright, browser, context, aba_sigef, aba_sei).
 
     Só retorna quando o usuário confirmar, digitando S, que entrou nos
     dois sistemas -- ou quando pedir para sair.
+
+    `url_destino` é a tela do SIGEF para onde a aba é levada depois do
+    login (a Ordem Bancária, por padrão) e `apresentacao` é a função que
+    mostra a primeira tela (a da OB, por padrão) -- a NE troca as duas.
     """
-    _apresentacao()
+    (apresentacao or _apresentacao)()
 
     _titulo("PASSO 1 DE 2  -  PREPARAR O NAVEGADOR")
 
@@ -602,14 +642,14 @@ def preparar_navegador(porta: int = PORTA_PADRAO):
         print("       Depois de digitar, aperte a tecla ENTER.")
 
     print()
-    print("🔁 Redirecionando a aba do SIGEF para a tela de Ordem Bancária...")
+    print("🔁 Redirecionando a aba do SIGEF para a tela de trabalho...")
     try:
-        aba_sigef.goto(URL_SIGEF_LISTAR_OB, timeout=60000)
+        aba_sigef.goto(url_destino, timeout=60000)
     except PlaywrightTimeoutError:
         print("   ⚠️  A tela está demorando pra carregar -- seguindo assim mesmo.")
     except PlaywrightError:
         pass
-    _garantir_url_certa(aba_sigef, DOMINIO_SIGEF, URL_SIGEF_LISTAR_OB, "SIGEF")
+    _garantir_url_certa(aba_sigef, DOMINIO_SIGEF, url_destino, "SIGEF")
 
     _caixa(
         [

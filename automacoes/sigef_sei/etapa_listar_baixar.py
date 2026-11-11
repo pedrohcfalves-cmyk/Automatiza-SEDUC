@@ -40,6 +40,7 @@ este arquivo só chama main.py.
 import json
 import os
 import re
+import shutil
 import time
 import traceback
 
@@ -59,11 +60,16 @@ from .preparar_navegador import (  # noqa: F401
     conectar_chrome,
     preparar_navegador,
 )
+from automacoes.geral import PASTA_DADOS, ano_sigef, url_sigef
+
 from .documentos import descrever as descrever_documentos
 from .documentos import filtrar_pacote, normalizar_documentos
 
 
 # ---------------------------------------------------------------- SIGEF
+
+# O exercício (o "2026" de .../SIGEF2026/...) vem de automacoes/geral.py: o ano
+# atual, ou o que a pessoa escolheu na janela.
 
 TRECHO_URL_DETALHAR_PP = "FINDetalharPreparacaoPagamentoDespesaEmpenhada.aspx"
 TRECHO_URL_DETALHAR_OB = "FINDetalharOrdemBancaria.aspx"
@@ -71,28 +77,40 @@ TRECHO_URL_DETALHAR_OB = "FINDetalharOrdemBancaria.aspx"
 # Tela de onde a OB é impressa. É uma tela de PESQUISA, aberta na aba
 # principal: recebe gestão + OB e o Imprimir dela abre a janela de
 # formato, igual aos outros documentos.
-URL_SIGEF_IMPRIMIR_OB_CONFERENCIA = (
-    "http://sigef.sefin.ro.gov.br/SIGEF2026/FIN/"
-    "FINImprimirOrdemBancariaConferencia.aspx?CdTransacao=197"
-)
+URL_SIGEF_IMPRIMIR_OB_CONFERENCIA = url_sigef("FIN/FINImprimirOrdemBancariaConferencia.aspx?CdTransacao=197")
 
 # Tela de onde a NL é impressa. Também é uma tela de PESQUISA na aba
 # principal: recebe ano + sequencial da NL, e o número na grade abre
 # "Detalhar Nota Lançamento Liquidação", que tem o Imprimir. Abrir a NL
 # pelo campo da tela da PP dá erro no próprio SIGEF.
-URL_SIGEF_LISTAR_NL = (
-    "http://sigef.sefin.ro.gov.br/SIGEF2026/FIN/"
-    "FINListarNotaLancamentoLiquidacao.aspx?CdTransacao=1495"
-)
+URL_SIGEF_LISTAR_NL = url_sigef("FIN/FINListarNotaLancamentoLiquidacao.aspx?CdTransacao=1495")
 
 # '2026NL012345' -> ano '2026', sequencial '012345'.
 REGEX_NL = re.compile(r"^\s*(\d{4})\s*NL\s*(\d+)\s*$", re.IGNORECASE)
+
+# Tela "Imprimir Despesa Certificada" -- só para a opção "pela tela de
+# impressão" do passo 3 (ce_impressao=True). Pesquisa por UG + gestão +
+# sequencial da CE, na ABA PRINCIPAL, e o Imprimir dela abre a janela de
+# formato, igual à OB. Sem a opção, a CE continua saindo pelo campo da PP.
+URL_SIGEF_IMPRIMIR_CE = url_sigef("FIN/FINImprimirDespesaCertificadaSituacao.aspx?CdTransacao=131")
+GESTAO_CE = "1"
+REGEX_CE = re.compile(r"^\s*(\d{4})\s*CE\s*(\d{1,6})\s*$", re.IGNORECASE)
+TIMEOUT_CE_MS = 30000
+
+# Nessa tela o PDF não baixa na hora: o SIGEF gera o relatório em segundo
+# plano e ele aparece em "Relatórios Assíncronos"; clicar na linha abre um
+# popup que baixa o arquivo (e o Chrome o marca como perigoso).
+URL_SIGEF_RELATORIOS_ASSINCRONOS = url_sigef("REL/RELListarRelatoriosAssincronos.aspx?CdTransacao=568")
+SELETOR_LINHAS_RELATORIOS = "#dtgDownloadsRelatorios tr.GridLinhaPar, #dtgDownloadsRelatorios tr.GridLinhaImpar"
+TIMEOUT_DOWNLOAD_DIRETO_MS = 5000   # se o PDF ainda baixar direto, usa ele
+ESPERA_RELATORIO_S = 120            # quanto esperar o relatório aparecer na lista
+INTERVALO_RELATORIO_S = 3           # de quanto em quanto recarregar a lista
 
 # Moldes de URL usados só como RESERVA, pra voltar a uma tela de detalhe
 # quando o SIGEF desvia a janela. O normal é guardar a URL real que ele
 # abriu -- aí CdUnidadeGestora/CdGestao vêm dele, não daqui.
 URL_SIGEF_DETALHAR_PP = (
-    "http://sigef.sefin.ro.gov.br/SIGEF2026/FIN/"
+    url_sigef("FIN/")
     + TRECHO_URL_DETALHAR_PP
     + "?CdUnidadeGestora={unidade_gestora}"
     + "&CdGestao={gestao}"
@@ -102,7 +120,7 @@ URL_SIGEF_DETALHAR_PP = (
 )
 
 URL_SIGEF_DETALHAR_OB = (
-    "http://sigef.sefin.ro.gov.br/SIGEF2026/FIN/"
+    url_sigef("FIN/")
     + TRECHO_URL_DETALHAR_OB
     + "?CdUnidadeGestora={unidade_gestora}"
     + "&CdGestao={gestao}"
@@ -144,11 +162,15 @@ TIMEOUT_NL_MS = 30000
 # Documentos baixados, sessão e relatórios de lote ficam SEMPRE em
 # Documentos\Automacao SIGEF-SEI -- rodando do código ou instalado --,
 # nunca na pasta do programa. LBA_PASTA_DADOS troca o lugar, se preciso.
-PASTA_BASE = os.environ.get("LBA_PASTA_DADOS") or os.path.join(
-    os.path.expanduser("~"), "Documents", "Automacao SIGEF-SEI"
-)
+PASTA_BASE = PASTA_DADOS  # automacoes/geral.py (um lugar só para todas as automações)
 os.makedirs(PASTA_BASE, exist_ok=True)
 CAMINHO_SESSAO = os.path.join(PASTA_BASE, "sessao_atual.json")
+
+# Diagnóstico da CE pela tela de impressão: um registro de cada passo
+# (diagnostico_ce.log) e, quando falha, foto + HTML da tela + o erro em
+# diagnostico_ce\. É o que mostra qual campo ou botão o SIGEF mudou.
+ARQUIVO_DIAGNOSTICO_CE = os.path.join(PASTA_BASE, "diagnostico_ce.log")
+PASTA_DIAGNOSTICO_CE = os.path.join(PASTA_BASE, "diagnostico_ce")
 
 
 def normalizar_processo_sei(texto: str) -> str | None:
@@ -187,17 +209,15 @@ def nome_pasta_valido(nome: str) -> str:
 def pdf_para_jpg(caminho_pdf: str, pasta_destino: str, nome_arquivo: str) -> list[str]:
     """Converte cada página do PDF em um JPG e salva na pasta destino."""
     os.makedirs(pasta_destino, exist_ok=True)
-    doc = pymupdf.open(caminho_pdf)
-
     caminhos_gerados = []
-    for i, pagina in enumerate(doc, start=1):
-        pix = pagina.get_pixmap(dpi=200)
-        sufixo = "" if len(doc) == 1 else f"_{i}"
-        caminho_jpg = os.path.join(pasta_destino, f"{nome_arquivo}{sufixo}.jpg")
-        pix.save(caminho_jpg)
-        caminhos_gerados.append(caminho_jpg)
-
-    doc.close()
+    # O "with" fecha o PDF mesmo se uma página falhar (o arquivo não fica
+    # preso e não sobra o documento inteiro na memória).
+    with pymupdf.open(caminho_pdf) as doc:
+        for i, pagina in enumerate(doc, start=1):
+            sufixo = "" if len(doc) == 1 else f"_{i}"
+            caminho_jpg = os.path.join(pasta_destino, f"{nome_arquivo}{sufixo}.jpg")
+            pagina.get_pixmap(dpi=200).save(caminho_jpg)
+            caminhos_gerados.append(caminho_jpg)
     return caminhos_gerados
 
 
@@ -662,6 +682,307 @@ def _baixar_nl(context, aba_sigef, pasta_destino: str, pp: str, numero_nl: str) 
     return novos_jpg
 
 
+# ------------------------------------- CE pela tela de impressão (opção)
+
+# Os seletores da tela "Imprimir Despesa Certificada", na ordem de uso. O
+# diagnóstico conta cada um na tela quando algo falha.
+SELETORES_TELA_CE = {
+    "Unidade Gestora": "#txtCdUnidadeGestora",
+    "Gestão": "#txtCdGestao_SIGEFPesquisa",
+    "Número da CE": "#txtDespesaCertificadaNumero_SIGEFPesquisa",
+    "Imprimir": 'a[title="Gerar Relatório"]',
+}
+
+
+def sequencial_ce_para_impressao(numero_ce: str) -> str | None:
+    """
+    '2026CE001234' -> '001234', se dá para imprimir essa CE pela tela de
+    impressão; senão None (e ela sai pelo caminho de sempre, o da PP).
+
+    O campo de lá só recebe o sequencial e pesquisa no exercício da URL:
+    uma CE de OUTRO ano viria trocada por outra com o mesmo sequencial.
+    """
+    achado = REGEX_CE.match(numero_ce or "")
+    if not achado or int(achado.group(1)) != ano_sigef():
+        return None
+    return achado.group(2).zfill(6)
+
+
+def _diag_ce(texto: str) -> None:
+    """Uma linha no diagnostico_ce.log. Falha ao gravar não atrapalha a automação."""
+    try:
+        with open(ARQUIVO_DIAGNOSTICO_CE, "a", encoding="utf-8") as arquivo:
+            arquivo.write(f"{time.strftime('%d/%m %H:%M:%S')} {texto}\n")
+    except OSError:
+        pass
+
+
+def registrar_falha_ce(context, pagina, numero_ce: str, passo: str, erro: BaseException) -> str:
+    """
+    Guarda na pasta diagnostico_ce tudo o que ajuda a corrigir a falha: o
+    passo, o erro, quais seletores existem na tela, as janelas abertas,
+    uma foto e o HTML. Devolve o caminho-base dos arquivos ("" se não deu).
+    Só observa: nunca muda o que a automação faz.
+    """
+    try:
+        os.makedirs(PASTA_DIAGNOSTICO_CE, exist_ok=True)
+        base = os.path.join(
+            PASTA_DIAGNOSTICO_CE, f"{time.strftime('%Y%m%d-%H%M%S')}_{nome_pasta_valido(numero_ce or 'CE')}"
+        )
+        linhas = [
+            f"CE: {numero_ce}",
+            f"Passo que falhou: {passo}",
+            f"Erro: {type(erro).__name__}: {erro}",
+            f"Endereço esperado: {URL_SIGEF_IMPRIMIR_CE}",
+        ]
+        try:
+            linhas.append(f"Endereço da aba: {pagina.url}")
+        except Exception as e:
+            linhas.append(f"Endereço da aba: (não li: {e})")
+        linhas.append("Seletores na tela (quantos achei):")
+        for nome, seletor in {**SELETORES_TELA_CE, "Linhas relatórios": SELETOR_LINHAS_RELATORIOS}.items():
+            try:
+                linhas.append(f"   {nome:16} {seletor:48} {pagina.locator(seletor).count()}")
+            except Exception as e:
+                linhas.append(f"   {nome:16} {seletor:48} erro: {type(e).__name__}")
+        try:
+            for aba in context.pages:
+                linhas.append(f"Janela aberta: {aba.url}")
+        except Exception:
+            pass
+        linhas += ["", "Rastro técnico:", traceback.format_exc()]
+        with open(base + ".txt", "w", encoding="utf-8") as arquivo:
+            arquivo.write("\n".join(linhas))
+        try:
+            pagina.screenshot(path=base + ".png", full_page=True, timeout=5000)
+        except Exception:
+            pass
+        try:
+            with open(base + ".html", "w", encoding="utf-8") as arquivo:
+                arquivo.write(pagina.content())
+        except Exception:
+            pass
+        _diag_ce(f"  FALHOU em '{passo}': {type(erro).__name__}: {erro} -> {base}.txt")
+        return base
+    except Exception:
+        return ""
+
+
+def _conferir_pdf_ce(caminho_pdf: str, sequencial: str) -> bool | None:
+    """
+    O PDF traz o número da CE pedida? True / False, ou None quando não dá
+    para saber (PDF só com imagem, leitor indisponível). Bem tolerante de
+    propósito: só serve para pegar a CE TROCADA, nunca para travar.
+    """
+    try:
+        with pymupdf.open(caminho_pdf) as doc:
+            texto = "".join(pagina.get_text() for pagina in doc)
+    except Exception:
+        return None
+    digitos = re.sub(r"\D", "", texto)
+    if not digitos:
+        return None
+    return sequencial.lstrip("0") in digitos
+
+
+def _e_pdf(caminho: str) -> bool:
+    try:
+        with open(caminho, "rb") as arquivo:
+            return arquivo.read(4) == b"%PDF"
+    except OSError:
+        return False
+
+
+def _salvar_download(context, download, caminho: str) -> None:
+    """
+    Grava o download em `caminho`. Se o Chrome barrar o arquivo (o SIGEF
+    vem marcado como perigoso), busca o MESMO endereço direto, com a sessão
+    do navegador -- sem passar pela barra de downloads do Chrome.
+    """
+    try:
+        falha = download.failure()
+        if not falha:
+            download.save_as(caminho)
+    except PlaywrightError as erro:
+        falha = str(erro)
+    if falha or not _e_pdf(caminho):
+        _diag_ce(f"  download pelo Chrome não serviu ({falha or 'não é PDF'}); buscando direto {download.url}")
+        resposta = context.request.get(download.url, timeout=TIMEOUT_CE_MS)
+        if not resposta.ok:
+            raise SystemExit(f"o Chrome barrou o download ({falha}) e buscar direto deu HTTP {resposta.status}")
+        with open(caminho, "wb") as arquivo:
+            arquivo.write(resposta.body())
+    if not _e_pdf(caminho):
+        try:
+            os.makedirs(PASTA_DIAGNOSTICO_CE, exist_ok=True)
+            shutil.copy(caminho, os.path.join(PASTA_DIAGNOSTICO_CE, f"{time.strftime('%Y%m%d-%H%M%S')}_arquivo_baixado"))
+        except OSError:
+            pass
+        raise SystemExit("o arquivo baixado não é um PDF (cópia na pasta de diagnóstico)")
+
+
+def _relatorios_assincronos(aba) -> list:
+    """Abre "Relatórios Assíncronos" e devolve [(código, linha)], na ordem da grade, sem as linhas vazias."""
+    aba.goto(URL_SIGEF_RELATORIOS_ASSINCRONOS)
+    aba.wait_for_load_state("networkidle")
+    linhas = aba.locator(SELETOR_LINHAS_RELATORIOS)
+    achados = []
+    for i in range(linhas.count()):
+        linha = linhas.nth(i)
+        codigo = linha.locator("td").first.inner_text().strip()   # strip() tira o &nbsp;
+        if codigo:
+            achados.append((codigo, linha))
+    return achados
+
+
+def _baixar_relatorio_assincrono(context, aba, codigos_antes: set, caminho: str) -> str:
+    """
+    Espera aparecer na grade um relatório que não estava lá antes do
+    Imprimir, clica no último deles (como se faz à mão) e grava o PDF do
+    popup em `caminho`. Devolve o código do relatório.
+    """
+    # shortcut: só olha a 1ª página da grade; se a lista crescer a ponto de paginar, ler as outras páginas.
+    limite = time.monotonic() + ESPERA_RELATORIO_S
+    while True:
+        novos = [(c, linha) for c, linha in _relatorios_assincronos(aba) if c not in codigos_antes]
+        if novos:
+            break
+        if time.monotonic() > limite:
+            raise SystemExit(f"o relatório não apareceu em Relatórios Assíncronos em {ESPERA_RELATORIO_S}s")
+        time.sleep(INTERVALO_RELATORIO_S)
+    codigo, linha = novos[-1]
+    _diag_ce(f"  relatório assíncrono {codigo} (novos: {[c for c, _ in novos]})")
+    alvo = linha.locator("a").first if linha.locator("a").count() else linha.locator("td").first
+    janelas_antes = set(context.pages)
+    with context.expect_event("download", timeout=TIMEOUT_CE_MS) as download_info:
+        alvo.click(timeout=TIMEOUT_CE_MS)
+    _salvar_download(context, download_info.value, caminho)
+    for pagina in set(context.pages) - janelas_antes:   # o popup que baixou
+        try:
+            pagina.close()
+        except PlaywrightError:
+            pass
+    return codigo
+
+
+def _baixar_ce_impressao(context, aba_sigef, pasta_destino: str, numero_ce: str, sequencial: str):
+    """
+    Baixa a CE pela tela "Imprimir Despesa Certificada": UG 160001,
+    gestão 1, o sequencial da CE e o Imprimir padrão do SIGEF. Devolve
+    (JPGs, conferida) -- `conferida` é o _conferir_pdf_ce().
+
+    Levanta SystemExit dizendo o passo que falhou, depois de gravar o
+    diagnóstico. Quem chama decide pular só esta CE (como na NL).
+    """
+    passo = "ler a lista de Relatórios Assíncronos (antes de imprimir)"
+    _diag_ce(f"CE {numero_ce} (sequencial {sequencial}) pela tela de impressão")
+    try:
+        aba_sigef.bring_to_front()
+        codigos_antes = {c for c, _ in _relatorios_assincronos(aba_sigef)}
+
+        passo = "abrir a tela Imprimir Despesa Certificada"
+        aba_sigef.goto(URL_SIGEF_IMPRIMIR_CE)
+        aba_sigef.wait_for_load_state("networkidle")
+        _diag_ce(f"  tela aberta: {aba_sigef.url}")
+
+        passo = "preencher a Unidade Gestora"
+        # Só mexe se estiver diferente (trocar a UG pode recarregar a tela).
+        campo_ug = aba_sigef.locator(SELETORES_TELA_CE["Unidade Gestora"])
+        if ler_valor_campo(campo_ug).strip() != CD_UNIDADE_GESTORA:
+            campo_ug.fill(CD_UNIDADE_GESTORA)
+
+        passo = "preencher a Gestão"
+        aba_sigef.locator(SELETORES_TELA_CE["Gestão"]).fill(GESTAO_CE)
+
+        passo = "preencher o número da CE"
+        aba_sigef.locator(SELETORES_TELA_CE["Número da CE"]).fill(sequencial)
+        _diag_ce(f"  campos: UG {CD_UNIDADE_GESTORA}, gestão {GESTAO_CE}, CE {sequencial}")
+
+        passo = "clicar em Imprimir (a janela de formato não abriu)"
+        with context.expect_page(timeout=TIMEOUT_CE_MS) as pagina_formato_info:
+            aba_sigef.locator(SELETORES_TELA_CE["Imprimir"]).click(timeout=TIMEOUT_CE_MS)
+        pagina_formato = pagina_formato_info.value
+        pagina_formato.wait_for_load_state("networkidle")
+
+        passo = "escolher o PDF na janela de formato"
+        caminho_pdf_temp = os.path.join(pasta_destino, "temp_ce.pdf")
+        botao_pdf = pagina_formato.locator('img[alt="Imprime Arquivo Formato PostScript (.pdf)"]')
+        botao_pdf.wait_for(timeout=TIMEOUT_CE_MS)
+        try:
+            with context.expect_event("download", timeout=TIMEOUT_DOWNLOAD_DIRETO_MS) as download_info:
+                botao_pdf.click(timeout=TIMEOUT_CE_MS)
+            _salvar_download(context, download_info.value, caminho_pdf_temp)
+            _diag_ce("  o PDF baixou direto da janela de formato")
+        except PlaywrightTimeoutError:
+            # O normal desta tela: o relatório vai para "Relatórios Assíncronos".
+            if not pagina_formato.is_closed():
+                pagina_formato.close()
+            passo = "baixar o relatório em Relatórios Assíncronos"
+            _baixar_relatorio_assincrono(context, aba_sigef, codigos_antes, caminho_pdf_temp)
+
+        passo = "converter o PDF em imagem"
+        conferida = _conferir_pdf_ce(caminho_pdf_temp, sequencial)
+        novos_jpg = pdf_para_jpg(
+            caminho_pdf_temp, pasta_destino,
+            nome_arquivo=f"Despesa Certificada - CE {nome_pasta_valido(numero_ce)}",
+        )
+        os.remove(caminho_pdf_temp)
+        if not pagina_formato.is_closed():
+            pagina_formato.close()
+        if not novos_jpg:
+            raise SystemExit("o PDF da CE veio sem nenhuma página")
+        _diag_ce(f"  ok: {len(novos_jpg)} JPG(s), número no PDF: {conferida}")
+        return novos_jpg, conferida
+    except (Exception, SystemExit) as erro:   # qualquer falha aqui pula só esta CE
+        registrar_falha_ce(context, aba_sigef, numero_ce, passo, erro)
+        detalhe = (str(getattr(erro, "code", None) or erro).strip().splitlines() or [type(erro).__name__])[0]
+        raise SystemExit(f"falhou ao {passo} ({detalhe})") from erro
+
+
+def _baixar_ces_pela_impressao(context, aba_sigef, pasta_destino, ces, lancamentos, grupos_ce, avisos_download):
+    """
+    Baixa as CEs anotadas no loop das PPs (`ces`, na ordem em que
+    apareceram) e põe os JPGs nos lançamentos e em `grupos_ce`. Uma que
+    der erro é pulada sozinha, com aviso na conferência -- igual à NL.
+    """
+    for numero_ce, sequencial in ces:
+        print(f"\n▶️  Despesa Certificada {numero_ce} pela tela de impressão")
+        janelas_antes = set(context.pages)
+        try:
+            novos_jpg, conferida = _baixar_ce_impressao(context, aba_sigef, pasta_destino, numero_ce, sequencial)
+            print(f"   📄 Despesa Certificada '{numero_ce}': {len(novos_jpg)} JPG(s)")
+            if conferida is False:
+                avisos_download.append(
+                    f"CE {numero_ce}: o PDF baixado pela tela de impressão não mostra o número "
+                    f"{sequencial}. Confira no SEI se é mesmo esta CE."
+                )
+                print(f"   ⚠️  O PDF não mostra o número {sequencial} -- confira esta CE no SEI.")
+        except SystemExit as erro:
+            avisos_download.append(
+                f"CE {numero_ce}: a tela de impressão {erro} e a CE NÃO foi anexada. "
+                "Baixe e inclua esta CE à mão (ou rode de novo pelo caminho de sempre). "
+                f"Detalhes em {PASTA_DIAGNOSTICO_CE}."
+            )
+            print(f"   ⚠️  Despesa Certificada {numero_ce}: {erro} -- pulando só ela.")
+            for pagina in set(context.pages) - janelas_antes:
+                try:
+                    pagina.close()
+                except PlaywrightError:
+                    pass
+            temp = os.path.join(pasta_destino, "temp_ce.pdf")
+            if os.path.exists(temp):
+                os.remove(temp)
+            continue
+
+        grupos_ce.append((numero_ce, novos_jpg))
+        for lancamento in lancamentos:
+            if lancamento.get("numero_ce") == numero_ce and not lancamento["arquivos_ce"]:
+                lancamento["arquivos_ce"] = novos_jpg
+                lancamento["arquivos_anexar"] = (
+                    novos_jpg + lancamento["arquivos_nl"] + lancamento["arquivos_pp"]
+                )
+
+
 # ------------------------------------------------------------- Download
 
 
@@ -679,6 +1000,7 @@ def baixar_documentos(
     gravar_sessao: bool = True,
     reaproveitar: bool = True,
     documentos=None,
+    ce_impressao: bool = False,
 ) -> dict:
     """
     Igual a _baixar_documentos_uma_vez(), mas recomeça sozinho quando uma
@@ -696,7 +1018,7 @@ def baixar_documentos(
             return _baixar_documentos_uma_vez(
                 context, aba_sigef, processo, ob,
                 pasta_base=pasta_base, gravar_sessao=gravar_sessao, reaproveitar=reaproveitar,
-                documentos=documentos,
+                documentos=documentos, ce_impressao=ce_impressao,
             )
         except PlaywrightError as erro:
             if "has been closed" not in str(erro) or tentativa == TENTATIVAS_JANELA_FECHADA:
@@ -723,6 +1045,7 @@ def _baixar_documentos_uma_vez(
     gravar_sessao: bool = True,
     reaproveitar: bool = True,
     documentos=None,
+    ce_impressao: bool = False,
 ) -> dict:
     """
     Baixa do SIGEF a CE, as NLs, as PPs e a OB de uma Ordem Bancária.
@@ -745,11 +1068,19 @@ def _baixar_documentos_uma_vez(
     Com `reaproveitar`, se esta mesma OB já foi baixada inteira para este
     mesmo processo (ver download_ja_feito), devolve o que está na pasta
     sem abrir o SIGEF: é a volta depois de uma falha no SEI.
+
+    Com `ce_impressao` (opção do passo 3), o loop das PPs só ANOTA o
+    número de cada CE, sem clicar nele; depois do loop, cada CE distinta
+    é impressa pela tela "Imprimir Despesa Certificada", na aba principal
+    (ver _baixar_ces_pela_impressao). CE de outro exercício, ou com número
+    fora do padrão, continua saindo pelo caminho de sempre.
     """
     ob = (ob or "").strip().upper()
     documentos = normalizar_documentos(documentos)
     marcados = set(documentos)
     print(f"🗂️  Documentos marcados para esta OB: {descrever_documentos(documentos)}")
+    if ce_impressao and "CE" in marcados:
+        print("🖨️  CE pela tela 'Imprimir Despesa Certificada' (opção do passo 3).")
 
     if reaproveitar:
         pronto = download_ja_feito(processo, ob, documentos)
@@ -891,6 +1222,7 @@ def _baixar_documentos_uma_vez(
 
     ce_baixadas: dict[str, list[str]] = {}   # número da CE -> JPGs já baixados
     grupos_ce: list[tuple[str, list[str]]] = []   # [(número, [jpgs...]), ...], uma entrada por CE distinta
+    ces_para_imprimir: list[tuple[str, str]] = []   # [(número, sequencial)], só com ce_impressao
 
     # Só a OB marcada: nada da tela da PP é preciso -- não abre nenhuma.
     # Os lançamentos (um por PP) continuam existindo, sem arquivos, para
@@ -954,7 +1286,22 @@ def _baixar_documentos_uma_vez(
             # desvia a janela da PP (ver o "voltando" logo abaixo).
             print(f"   ➖ Despesa Certificada {numero_ce} não foi marcada -- não baixo.")
             arquivos_desta_ce = []
+        elif ce_impressao and sequencial_ce_para_impressao(numero_ce):
+            # Só anota: a CE sai depois do loop, pela tela de impressão.
+            # Sem clicar no campo, o SIGEF também não desvia a janela da PP.
+            if numero_ce not in dict(ces_para_imprimir):
+                ces_para_imprimir.append((numero_ce, sequencial_ce_para_impressao(numero_ce)))
+                print(f"   🖨️  Despesa Certificada {numero_ce}: baixo no fim, pela tela de impressão.")
+            else:
+                print(f"   ↩️  Despesa Certificada {numero_ce} já anotada -- sai uma vez só.")
+            arquivos_desta_ce = []
         else:
+            if ce_impressao:
+                print(
+                    f"   ℹ️  Despesa Certificada '{numero_ce}' não é do exercício {ano_sigef()} "
+                    "(ou está fora do padrão) -- baixo pelo caminho de sempre."
+                )
+                _diag_ce(f"CE {numero_ce!r} fora do padrão/exercício {ano_sigef()}: caminho de sempre (PP {pp})")
             chave_ce = numero_ce
 
             if chave_ce in ce_baixadas:
@@ -1112,6 +1459,15 @@ def _baixar_documentos_uma_vez(
         pagina_ob.close()
 
     aba_sigef.bring_to_front()
+
+    # 7.A2 CEs anotadas para a tela de impressão (só com ce_impressao).
+    #      Antes das NLs: a NL refaz "arquivos_anexar" com a CE já dentro.
+    if ces_para_imprimir:
+        _baixar_ces_pela_impressao(
+            context, aba_sigef, pasta_destino, ces_para_imprimir, lancamentos, grupos_ce, avisos_download
+        )
+        if gravar_sessao:
+            salvar_sessao(lancamentos=lancamentos, grupos_ce=grupos_ce, avisos_download=avisos_download)
 
     # 7.B  Uma NL por PP. Se uma der erro, pula só ela: a PP e a OB seguem,
     #      e a conferência avisa qual ficou faltando.

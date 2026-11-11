@@ -293,7 +293,7 @@ class Relatorio:
 
 def processar_lote(
     context, aba_sigef, itens: list[ItemLote], ao_mudar=None, deve_parar=None, ao_etapa=None,
-    documentos=None,
+    documentos=None, ce_impressao: bool = False,
 ) -> tuple[list[Resultado], str]:
     """
     Processa os itens válidos, um por vez. Devolve (resultados, caminho
@@ -309,6 +309,7 @@ def processar_lote(
 
     `documentos` (ver documentos.py): os tipos marcados na janela, os
     mesmos para todos os processos da lista. None é todos.
+    `ce_impressao`: a CE sai pela tela de impressão (baixar_documentos).
     """
     avisar = ao_mudar or (lambda indice, resultado: None)
     etapa = ao_etapa or (lambda nome, **dados: None)
@@ -341,7 +342,8 @@ def processar_lote(
                 cron.etapa("sigef")
                 etapa("sigef")
                 dados = baixar_documentos(
-                    context, aba_sigef, item.processo, item.ob, documentos=documentos
+                    context, aba_sigef, item.processo, item.ob, documentos=documentos,
+                    ce_impressao=ce_impressao,
                 )
                 resultado.pasta = dados.get("pasta_processo") or ""
                 etapa("resumo", dados=dados)

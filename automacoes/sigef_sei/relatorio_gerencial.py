@@ -263,10 +263,12 @@ def gerar(de: date, ate: date, minutos_manual: float, destino: str | None = None
     )
 
     # ---- detalhe
+    _SELO_CONCLUIDA = "<span class='selo ok'>Concluída</span>"   # fora da f-string: compatível com Python < 3.12
+    _SELO_NAO_CONCLUIDA = "<span class='selo erro'>Não concluída</span>"
     linhas_detalhe = "".join(
         f'<tr><td class="num">{ob["fim"]:%d/%m/%Y %H:%M}</td><td class="mono">{_e(ob["processo"])}</td><td class="mono">{_e(ob["ob"])}</td>'
         f'<td>{_e(ob["tipo_ob"])}</td><td>{"Lote" if ob["origem"] == "lote" else "Avulsa"}</td>'
-        f'<td>{"<span class=\'selo ok\'>Concluída</span>" if ob["concluida"] else "<span class=\'selo erro\'>Não concluída</span>"}</td>'
+        f'<td>{_SELO_CONCLUIDA if ob["concluida"] else _SELO_NAO_CONCLUIDA}</td>'
         f'<td class="num">{_n(ob["pps"])}</td><td class="num">{_n(ob["documentos"])}</td><td class="num">{_n(ob["paginas"])}</td>'
         f'<td class="num">{ob["rodadas"]}</td><td class="num">{_dur(ob["tempo"])}</td></tr>'
         for ob in sorted(obs, key=lambda o: o["fim"], reverse=True)

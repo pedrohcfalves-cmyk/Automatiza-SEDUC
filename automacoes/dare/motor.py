@@ -1,8 +1,9 @@
 """
 Motor de execução usado pelo aplicativo com janela.
 
-Faz o mesmo que o loop do modo terminal (dare_automacao.executar_lotes): para cada lançamento,
-DARE -> PDF -> SEI, seguindo para o próximo se um falhar. A diferença é que roda numa thread
+Faz o mesmo que o loop do modo terminal (dare_automacao.executar_lotes): para cada processo,
+gera os DAREs (PDFs) de todos os seus lançamentos, junta os PDFs num só arquivo e anexa esse
+arquivo UMA vez no SEI, seguindo para o próximo se um falhar. A diferença é que roda numa thread
 separada (a janela continua respondendo), avisa a janela por "eventos" e MEDE o tempo de
 cada etapa, gravando em dados/desempenho.csv (usado na aba Desempenho).
 
@@ -16,9 +17,10 @@ import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import Callable
 
-from . import armazenamento, config, dare, navegador, sei, utils
+from . import armazenamento, config, dare, juntar, navegador, sei, utils
 from .modelos import DadosDare, ResultadoLote
 
 try:  # o aplicativo abre mesmo sem o Playwright; o erro só aparece ao executar
@@ -81,8 +83,9 @@ class MedidorEtapas(logging.Handler):
         self.marcas: dict[str, float] = {}
         self.ao_mudar_etapa = ao_mudar_etapa
 
-    def reiniciar(self) -> None:
-        self.marcas = {"preparo": time.perf_counter()}
+    def reiniciar(self, preparo: bool = True) -> None:
+        """Zera as marcas; com `preparo`, a etapa "Preparar formulário" começa agora."""
+        self.marcas = {"preparo": time.perf_counter()} if preparo else {}
 
     def emit(self, record: logging.LogRecord) -> None:
         try:
@@ -149,15 +152,32 @@ def _aguardar_login(emitir: Emissor, controle: Controle) -> None:
     emitir("login_confirmado", {})
 
 
+@dataclass
+class _Gerado:
+    """DARE já gerado, esperando o anexo (junto com os outros do mesmo processo) no SEI."""
+
+    indice: int
+    dados: DadosDare
+    pdf: str
+    servidor: str
+    dare_s: float
+    duracoes: dict[str, float]
+
+
 def executar(lotes: list[DadosDare], emitir: Emissor, controle: Controle
              ) -> tuple[list[ResultadoLote], bool]:
     """
-    Processa os lançamentos em sequência numa única conexão com o navegador.
+    Processa os lançamentos numa única conexão com o navegador, processo a processo:
+    gera os DAREs de cada processo, junta os PDFs num só e anexa esse arquivo UMA vez no SEI.
+    Os lançamentos são reordenados para que os do mesmo processo fiquem seguidos (os
+    índices dos eventos se referem a essa ordem; a janela usa juntar.ordenar_por_processo).
     Devolve (resultados, interrompido). Nunca levanta exceção: erros viram resultados.
     """
+    lotes = juntar.ordenar_por_processo(lotes)
     total = len(lotes)
-    resultados: list[ResultadoLote] = []
+    feitos: dict[int, ResultadoLote] = {}  # índice (base 1) -> resultado
     interrompido = False
+    conexao: float | None = None
     execucao = datetime.now().strftime("%Y%m%d-%H%M%S")
     medidor = MedidorEtapas(lambda chave: emitir("etapa", {"etapa": chave,
                                                             "rotulo": ROTULO_ETAPA[chave]}))
@@ -167,6 +187,32 @@ def executar(lotes: list[DadosDare], emitir: Emissor, controle: Controle
     raiz.addHandler(medidor)
     emitir("inicio", {"total": total})
     armazenamento.salvar_lote(lotes)  # sobrevive a erro ou queda do computador
+
+    def concluir(i: int, dados: DadosDare, erro: str, pdf: str, servidor: str, dare_s: float,
+                 sei_s: float | None, duracoes: dict[str, float], extra: str = "") -> None:
+        """Registra o resultado de um lançamento (histórico, desempenho) e avisa a janela."""
+        rotulo = _rotulo(i, total, dados)
+        sucesso = not erro
+        status = "SUCESSO" if sucesso else "ERRO"
+        obs = " · ".join(p for p in (rotulo, extra, erro) if p)[:300]
+        armazenamento.registrar_historico(dados, status, servidor, pdf, obs)
+        resultado = ResultadoLote(dados, sucesso, pdf, servidor, erro)
+        feitos[i] = resultado
+        segundos = dare_s + (sei_s or 0.0)
+        linha = {
+            "data_hora": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+            "execucao": execucao, "lote": i, "total_lotes": total,
+            "origem": "planilha" if dados.origem else "digitado", "status": status,
+            "conexao_s": _fmt(conexao) if i == 1 else "",
+            "total_s": _fmt(segundos),
+            "dare_s": _fmt(dare_s),
+            "sei_s": _fmt(sei_s),
+        }
+        linha.update({f"{c}_s": _fmt(s) for c, s in duracoes.items()})
+        _registrar_desempenho(linha)
+        emitir("lote_fim", {"indice": i, "total": total, "resultado": resultado,
+                            "segundos": segundos, "etapas": duracoes})
+
     try:
         if sync_playwright is None:
             raise RuntimeError("O componente Playwright não está instalado.")
@@ -194,58 +240,91 @@ def executar(lotes: list[DadosDare], emitir: Emissor, controle: Controle
 
             _aguardar_login(emitir, controle)
 
-            for i, dados in enumerate(lotes, 1):
+            for grupo in juntar.agrupar_por_processo(lotes):
                 if controle.cancelar.is_set():
                     interrompido = True
-                    log.warning("Execução interrompida pelo usuário antes do %s.", _rotulo(i, total, dados))
+                    i = grupo[0] + 1
+                    log.warning("Execução interrompida pelo usuário antes do %s.",
+                                _rotulo(i, total, lotes[i - 1]))
                     break
-                rotulo = _rotulo(i, total, dados)
-                emitir("lote_inicio", {"indice": i, "total": total, "dados": dados})
-                armazenamento.salvar_ultimos(dados)
-                log.info(
-                    "=== %s · processo %s · CPF %s · venc %s · R$ %s ===",
-                    rotulo, dados.processo, utils.mascarar_cpf(dados.cpf),
-                    dados.vencimento.strftime("%d/%m/%Y"), dados.valor,
-                )
-                medidor.reiniciar()
-                inicio = time.perf_counter()
-                servidor, pdf, erro = "", "", ""
-                try:
-                    page = navegador.garantir_aba(context, page, config.HOST_DARE, config.URL_DARE)
-                    navegador.ativar_aba(context, page)
-                    if i > 1:
-                        page.goto(config.URL_DARE)
-                    page.wait_for_load_state("networkidle")
-                    caminho_pdf, servidor = dare.gerar_dare(context, page, dados)
-                    pdf = str(caminho_pdf)
-                    page_sei = sei.anexar_pdf(context, page_sei, dados, caminho_pdf)
-                except Exception as exc:  # noqa: BLE001 - registra e segue para o próximo lote
-                    navegador.capturar_erro(context)
-                    log.exception("Falha em %s", rotulo)
-                    erro = _resumo_erro(exc)
-                fim = time.perf_counter()
-                duracoes = medidor.duracoes(fim)
-                sucesso = not erro
-                status = "SUCESSO" if sucesso else "ERRO"
-                obs = " · ".join(p for p in (rotulo, erro) if p)[:300]
-                armazenamento.registrar_historico(dados, status, servidor, pdf, obs)
-                resultado = ResultadoLote(dados, sucesso, pdf, servidor, erro)
-                resultados.append(resultado)
 
-                inicio_sei = medidor.marcas.get("sei_1")
-                linha = {
-                    "data_hora": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
-                    "execucao": execucao, "lote": i, "total_lotes": total,
-                    "origem": "planilha" if dados.origem else "digitado", "status": status,
-                    "conexao_s": _fmt(conexao) if i == 1 else "",
-                    "total_s": _fmt(fim - inicio),
-                    "dare_s": _fmt((inicio_sei or fim) - inicio),
-                    "sei_s": _fmt(fim - inicio_sei) if inicio_sei else "",
-                }
-                linha.update({f"{c}_s": _fmt(s) for c, s in duracoes.items()})
-                _registrar_desempenho(linha)
-                emitir("lote_fim", {"indice": i, "total": total, "resultado": resultado,
-                                    "segundos": fim - inicio, "etapas": duracoes})
+                # 1) Gera os DAREs (PDFs) de todos os lançamentos deste processo
+                gerados: list[_Gerado] = []
+                for pos, indice in enumerate(grupo):
+                    i, dados = indice + 1, lotes[indice]
+                    rotulo = _rotulo(i, total, dados)
+                    if pos and controle.cancelar.is_set():
+                        interrompido = True
+                        log.warning("Execução interrompida pelo usuário antes do %s.", rotulo)
+                        break
+                    emitir("lote_inicio", {"indice": i, "total": total, "dados": dados})
+                    armazenamento.salvar_ultimos(dados)
+                    log.info(
+                        "=== %s · processo %s · CPF %s · venc %s · R$ %s ===",
+                        rotulo, dados.processo, utils.mascarar_cpf(dados.cpf),
+                        dados.vencimento.strftime("%d/%m/%Y"), dados.valor,
+                    )
+                    medidor.reiniciar()
+                    inicio = time.perf_counter()
+                    servidor, pdf, erro = "", "", ""
+                    try:
+                        page = navegador.garantir_aba(context, page, config.HOST_DARE, config.URL_DARE)
+                        navegador.ativar_aba(context, page)
+                        if i > 1:
+                            page.goto(config.URL_DARE)
+                        page.wait_for_load_state("networkidle")
+                        caminho_pdf, servidor = dare.gerar_dare(context, page, dados)
+                        pdf = str(caminho_pdf)
+                    except Exception as exc:  # noqa: BLE001 - registra e segue para o próximo
+                        navegador.capturar_erro(context)
+                        log.exception("Falha em %s", rotulo)
+                        erro = _resumo_erro(exc)
+                    fim = time.perf_counter()
+                    duracoes = medidor.duracoes(fim)
+                    if erro:
+                        concluir(i, dados, erro, pdf, servidor, fim - inicio, None, duracoes)
+                    else:
+                        gerados.append(_Gerado(i, dados, pdf, servidor, fim - inicio, duracoes))
+                        emitir("lote_pdf", {"indice": i, "total": total, "pdf": pdf,
+                                            "servidor": servidor, "segundos": fim - inicio})
+
+                if not gerados:
+                    if interrompido:
+                        break
+                    continue
+
+                # 2) Junta os PDFs e anexa UM arquivo no SEI para o processo
+                processo = gerados[0].dados.processo
+                emitir("sei_inicio", {"indices": [g.indice for g in gerados], "processo": processo,
+                                      "quantidade": len(gerados)})
+                medidor.reiniciar(preparo=False)
+                inicio_sei = time.perf_counter()
+                erro_sei, anexos = "", []
+                try:
+                    anexos = juntar.preparar_anexos([Path(g.pdf) for g in gerados], processo)
+                    for arquivo in anexos:
+                        page_sei = sei.anexar_pdf(context, page_sei, gerados[0].dados, arquivo)
+                except Exception as exc:  # noqa: BLE001 - registra e segue para o próximo processo
+                    navegador.capturar_erro(context)
+                    log.exception("Falha ao anexar no SEI o processo %s", processo)
+                    erro_sei = _resumo_erro(exc)
+                fim_sei = time.perf_counter()
+                etapas_sei = medidor.duracoes(fim_sei)
+                if "sei_1" in medidor.marcas:  # o tempo de juntar os PDFs entra em "abrir processo"
+                    etapas_sei["sei_1"] += medidor.marcas["sei_1"] - inicio_sei
+
+                # O tempo do SEI é dividido entre os DAREs anexados juntos.
+                n = len(gerados)
+                extra = ""
+                if n > 1 and len(anexos) == 1:
+                    extra = f"anexado junto com outros {n - 1} DARE(s) em {anexos[0].name}"
+                for g in gerados:
+                    duracoes = dict(g.duracoes)
+                    duracoes.update({c: s / n for c, s in etapas_sei.items()})
+                    concluir(g.indice, g.dados, erro_sei, g.pdf, g.servidor, g.dare_s,
+                             (fim_sei - inicio_sei) / n, duracoes, extra)
+                if interrompido:
+                    break
     except Cancelado:
         interrompido = True
         log.warning("Execução cancelada pelo usuário.")
@@ -253,13 +332,19 @@ def executar(lotes: list[DadosDare], emitir: Emissor, controle: Controle
         log.exception("Falha geral na execução")
         resumo = _resumo_erro(exc)
         emitir("erro_geral", {"mensagem": resumo})
-        for i, dados in enumerate(lotes[len(resultados):], len(resultados) + 1):
+        # Tudo o que não terminou fica com este erro (inclusive DAREs gerados e não anexados).
+        for i in range(1, total + 1):
+            if i in feitos:
+                continue
+            dados = lotes[i - 1]
             rotulo = _rotulo(i, total, dados)
             armazenamento.registrar_historico(dados, "ERRO", "", "", f"{rotulo} · {resumo}"[:300])
-            resultados.append(ResultadoLote(dados, False, "", "", resumo))
+            feitos[i] = ResultadoLote(dados, False, "", "", resumo)
     finally:
         raiz.removeHandler(medidor)
 
+    # Na ordem dos lançamentos (os processados são sempre os primeiros da lista).
+    resultados = [feitos[i] for i in sorted(feitos)]
     # Pendentes = os que falharam + os que nem chegaram a ser processados.
     pendentes = [d for d, r in zip(lotes, resultados) if not r.sucesso] + lotes[len(resultados):]
     try:

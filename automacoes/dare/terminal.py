@@ -2,6 +2,7 @@
 DARE automação — ponto de entrada.
 
 Gera o DARE avulso, salva o PDF e o anexa como documento externo no processo do SEI.
+Os DAREs do mesmo processo são juntados num único PDF, anexado uma só vez no SEI.
 Abre o Chrome em modo depuração (SEI + DARE) e processa os lançamentos em lote, digitados
 na tela (modo em lotes) ou lidos de uma planilha do Excel (modo planilha).
 Uso:  python -m automacoes.dare.terminal   (da pasta da Central de Automações)
@@ -17,11 +18,13 @@ Veja o README.md para o passo a passo.
 import logging
 import os
 import sys
+from pathlib import Path
 
 try:
     from playwright.sync_api import sync_playwright
 
-    from . import armazenamento, config, dare, fluxo_planilha, logger, menu, navegador, sei, utils
+    from . import (armazenamento, config, dare, fluxo_planilha, juntar, logger, menu,
+                   navegador, sei, utils)
     from .modelos import DadosDare, ResultadoLote
 except ImportError as exc:  # dependência não instalada
     sys.exit(
@@ -54,16 +57,29 @@ def _observacao(rotulo: str, extra: str = "") -> str:
 
 def executar_lotes(lotes: list[DadosDare]) -> tuple[list[ResultadoLote], bool]:
     """
-    Processa os lançamentos em sequência, do primeiro ao último, numa única conexão com o Chrome.
-    Cada lançamento percorre o fluxo completo (DARE -> PDF -> SEI). Se um falhar, o erro é
-    registrado e o loop SEGUE para o próximo. Um lançamento avulso é um lote de tamanho 1.
+    Processa os lançamentos numa única conexão com o Chrome, processo a processo: gera os
+    DAREs (PDFs) de todos os lançamentos do mesmo processo, junta os PDFs num só arquivo e
+    anexa esse arquivo UMA vez no SEI. Se um falhar, o erro é registrado e o loop SEGUE.
+    Um lançamento avulso é um lote de tamanho 1 (anexa o próprio PDF, sem juntar).
 
-    Devolve (resultados na ordem processada, interrompido). `interrompido` é True se o usuário
-    cancelou com Ctrl+C; então os lotes que sobraram não foram processados.
+    Os lançamentos são reordenados para que os do mesmo processo fiquem seguidos
+    (juntar.ordenar_por_processo); os resultados seguem essa ordem.
+    Devolve (resultados, interrompido). `interrompido` é True se o usuário cancelou com
+    Ctrl+C; então os lotes que sobraram não foram processados.
     """
+    lotes = juntar.ordenar_por_processo(lotes)
     total = len(lotes)
-    resultados: list[ResultadoLote] = []
+    feitos: dict[int, ResultadoLote] = {}  # índice (base 1) -> resultado
     interrompido = False
+    gerados: list[tuple[int, DadosDare, str, str]] = []  # (índice, dados, pdf, servidor) sem anexo
+
+    def concluir(i: int, dados: DadosDare, status: str, pdf: str, servidor: str,
+                 erro: str = "", extra: str = "") -> None:
+        rotulo = _rotulo(i, total, dados)
+        armazenamento.registrar_historico(dados, status, servidor, pdf,
+                                          _observacao(rotulo, " · ".join(p for p in (extra, erro) if p)))
+        feitos[i] = ResultadoLote(dados, status == "SUCESSO", pdf, servidor, erro)
+
     try:
         navegador.garantir_chrome()  # reabre o Chrome (SEI + DARE) se foi fechado; senão, só segue
         with sync_playwright() as p:
@@ -88,67 +104,114 @@ def executar_lotes(lotes: list[DadosDare]) -> tuple[list[ResultadoLote], bool]:
                 menu.aguardar_login()
                 _estado["login_confirmado"] = True
 
-            for i, dados in enumerate(lotes, 1):
-                rotulo = _rotulo(i, total, dados)
-                if total > 1:
-                    menu.cabecalho_lote(i, total, dados)
-                armazenamento.salvar_ultimos(dados)  # se falhar, dá para repetir sem redigitar
-                log.info(
-                    "=== %s · processo %s · CPF %s · venc %s · R$ %s ===",
-                    rotulo or "Nova execução", dados.processo, utils.mascarar_cpf(dados.cpf),
-                    dados.vencimento.strftime("%d/%m/%Y"), dados.valor,
-                )
-                servidor, pdf = "", ""
-                try:
-                    # Você pode ter ficado na aba do SEI: procura de novo a do DARE e a traz à frente.
-                    page = navegador.garantir_aba(context, page, config.HOST_DARE, config.URL_DARE)
-                    navegador.ativar_aba(context, page)
-                    if i > 1:  # a partir do 2º lote, volta ao formulário em branco do DARE
-                        page.goto(config.URL_DARE)
-                    page.wait_for_load_state("networkidle")
-
-                    caminho_pdf, servidor = dare.gerar_dare(context, page, dados)
-                    pdf = str(caminho_pdf)
-                    page_sei = sei.anexar_pdf(context, page_sei, dados, caminho_pdf)
-                except KeyboardInterrupt:
-                    log.warning("%s cancelado pelo usuário.", rotulo or "Execução")
-                    armazenamento.registrar_historico(
-                        dados, "CANCELADO", servidor, pdf, _observacao(rotulo)
-                    )
-                    raise
-                except Exception as exc:  # noqa: BLE001 - registra e segue para o próximo lote
-                    navegador.capturar_erro(context)
-                    log.exception("Falha em %s", rotulo or "execução")
-                    resumo = _resumo_erro(exc)
-                    armazenamento.registrar_historico(
-                        dados, "ERRO", servidor, pdf, _observacao(rotulo, resumo)
-                    )
-                    resultados.append(ResultadoLote(dados, False, pdf, servidor, resumo))
-                    if os.environ.get("DARE_DEBUG"):
-                        raise  # no depurador do VS Code, para exatamente onde deu o erro
+            for grupo in juntar.agrupar_por_processo(lotes):
+                # 1) Gera os DAREs (PDFs) de todos os lançamentos deste processo
+                gerados = []
+                for indice in grupo:
+                    i, dados = indice + 1, lotes[indice]
+                    rotulo = _rotulo(i, total, dados)
                     if total > 1:
-                        menu.erro(f"{rotulo} falhou ({resumo}). Seguindo para o próximo...")
+                        menu.cabecalho_lote(i, total, dados)
+                    armazenamento.salvar_ultimos(dados)  # se falhar, dá para repetir sem redigitar
+                    log.info(
+                        "=== %s · processo %s · CPF %s · venc %s · R$ %s ===",
+                        rotulo or "Nova execução", dados.processo, utils.mascarar_cpf(dados.cpf),
+                        dados.vencimento.strftime("%d/%m/%Y"), dados.valor,
+                    )
+                    servidor, pdf = "", ""
+                    try:
+                        # Você pode ter ficado na aba do SEI: procura de novo a do DARE e a traz à frente.
+                        page = navegador.garantir_aba(context, page, config.HOST_DARE, config.URL_DARE)
+                        navegador.ativar_aba(context, page)
+                        if i > 1:  # a partir do 2º lote, volta ao formulário em branco do DARE
+                            page.goto(config.URL_DARE)
+                        page.wait_for_load_state("networkidle")
+
+                        caminho_pdf, servidor = dare.gerar_dare(context, page, dados)
+                        pdf = str(caminho_pdf)
+                    except KeyboardInterrupt:
+                        log.warning("%s cancelado pelo usuário.", rotulo or "Execução")
+                        armazenamento.registrar_historico(
+                            dados, "CANCELADO", servidor, pdf, _observacao(rotulo)
+                        )
+                        raise
+                    except Exception as exc:  # noqa: BLE001 - registra e segue para o próximo lote
+                        navegador.capturar_erro(context)
+                        log.exception("Falha em %s", rotulo or "execução")
+                        resumo = _resumo_erro(exc)
+                        concluir(i, dados, "ERRO", pdf, servidor, resumo)
+                        if os.environ.get("DARE_DEBUG"):
+                            raise  # no depurador do VS Code, para exatamente onde deu o erro
+                        if total > 1:
+                            menu.erro(f"{rotulo} falhou ({resumo}). Seguindo para o próximo...")
+                        continue
+                    gerados.append((i, dados, pdf, servidor))
+
+                if not gerados:
                     continue
 
-                armazenamento.registrar_historico(
-                    dados, "SUCESSO", servidor, pdf, _observacao(rotulo)
-                )
-                resultados.append(ResultadoLote(dados, True, pdf, servidor))
-                if total > 1:
-                    menu.sucesso(f"{rotulo} concluído.")
+                # 2) Junta os PDFs e anexa UM arquivo no SEI para o processo
+                processo = gerados[0][1].processo
+                if len(gerados) > 1:
+                    menu.info(f"Juntando {len(gerados)} DAREs do processo {processo} e anexando no SEI...")
+                anexos = []
+                try:
+                    anexos = juntar.preparar_anexos([Path(g[2]) for g in gerados], processo)
+                    for arquivo in anexos:
+                        page_sei = sei.anexar_pdf(context, page_sei, gerados[0][1], arquivo)
+                except KeyboardInterrupt:
+                    raise
+                except Exception as exc:  # noqa: BLE001 - registra e segue para o próximo processo
+                    navegador.capturar_erro(context)
+                    log.exception("Falha ao anexar no SEI o processo %s", processo)
+                    resumo = _resumo_erro(exc)
+                    for i, dados, pdf, servidor in gerados:
+                        concluir(i, dados, "ERRO", pdf, servidor, resumo)
+                    gerados = []
+                    if os.environ.get("DARE_DEBUG"):
+                        raise
+                    if total > 1:
+                        menu.erro(f"Processo {processo}: o anexo no SEI falhou ({resumo}). "
+                                  "Seguindo para o próximo...")
+                    continue
+
+                extra = ""
+                if len(gerados) > 1 and len(anexos) == 1:
+                    extra = f"anexado junto com outros {len(gerados) - 1} DARE(s) em {anexos[0].name}"
+                for i, dados, pdf, servidor in gerados:
+                    concluir(i, dados, "SUCESSO", pdf, servidor, extra=extra)
+                    if total > 1:
+                        menu.sucesso(f"{_rotulo(i, total, dados)} concluído.")
+                gerados = []
     except KeyboardInterrupt:
         interrompido = True
+        # DAREs gerados deste processo que não chegaram a ser anexados
+        for i, dados, pdf, servidor in gerados:
+            if i not in feitos:
+                armazenamento.registrar_historico(
+                    dados, "CANCELADO", servidor, pdf,
+                    _observacao(_rotulo(i, total, dados), "DARE gerado, não anexado")
+                )
     except Exception as exc:  # noqa: BLE001
         if os.environ.get("DARE_DEBUG"):
             raise
         # Falha geral (ex.: Chrome fechado): os lotes que faltavam ficam com este erro.
         log.exception("Falha geral na execução")
         resumo = _resumo_erro(exc)
-        for i, dados in enumerate(lotes[len(resultados):], len(resultados) + 1):
-            rotulo = _rotulo(i, total, dados)
-            armazenamento.registrar_historico(dados, "ERRO", "", "", _observacao(rotulo, resumo))
-            resultados.append(ResultadoLote(dados, False, "", "", resumo))
+        for i in range(1, total + 1):
+            if i not in feitos:
+                dados = lotes[i - 1]
+                armazenamento.registrar_historico(
+                    dados, "ERRO", "", "", _observacao(_rotulo(i, total, dados), resumo)
+                )
+                feitos[i] = ResultadoLote(dados, False, "", "", resumo)
 
+    # Só os lançamentos concluídos, na ordem (num cancelamento, os não anexados ficam de fora).
+    resultados = []
+    for i in range(1, total + 1):
+        if i not in feitos:
+            break
+        resultados.append(feitos[i])
     log.info(
         "=== Fim: %s de %s com sucesso%s ===",
         sum(r.sucesso for r in resultados), total, " (interrompido)" if interrompido else "",
@@ -158,6 +221,8 @@ def executar_lotes(lotes: list[DadosDare]) -> tuple[list[ResultadoLote], bool]:
 
 def _rodar_lotes(lotes: list[DadosDare]) -> None:
     """Roda todos os lançamentos (digitados ou da planilha) e oferece repetir só os que falharam."""
+    # Mesma ordem usada em executar_lotes (lançamentos do mesmo processo seguidos).
+    lotes = juntar.ordenar_por_processo(lotes)
     armazenamento.salvar_lote(lotes)  # lote pendente: sobrevive a erro, Ctrl+C ou queda do PC
     pendentes = list(lotes)
     while pendentes:

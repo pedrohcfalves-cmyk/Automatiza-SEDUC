@@ -133,6 +133,21 @@ class TestExecucao(Base):
         self.assertEqual(len(fim["lista"]["linhas"]), 1)          # só o pendente fica na lista
         self.assertEqual(fim["resultados"][0]["dados"]["cpf"], CPF)
 
+    def test_linhas_da_tela_seguem_a_ordem_por_processo(self):
+        # O motor junta os PDFs por processo e reordena a lista; a tela numera as linhas igual.
+        for proc in ("0012.111111/2026-12", "0012.222222/2026-12", "0012.111111/2026-12"):
+            M.chamar("salvar", {"valores": self.valores(proc)})
+        recebido = []
+        with mock.patch.object(motor, "iniciar_em_thread", lambda lotes, *a: recebido.extend(lotes)):
+            r = M.chamar("iniciar")
+        self.assertEqual([l.processo for l in recebido], [
+            "0012.111111/2026-12", "0012.111111/2026-12", "0012.222222/2026-12"])
+        self.assertEqual([l["processo"] for l in r["lotes"]], [l.processo for l in recebido])
+        M._e.executando = False
+        M._e.controle = None
+        M._e.trava_chrome = False
+        modulos_janela.USO_DO_CHROME.release()
+
     def test_nao_comeca_com_o_chrome_ocupado(self):
         M.chamar("salvar", {"valores": self.valores()})
         modulos_janela.USO_DO_CHROME.acquire()

@@ -126,6 +126,10 @@ FOLGA_HTML_POR_IMAGEM_BYTES = 400
 FOLGA_HTML_DOCUMENTO_BYTES = 20_000
 
 
+class NumeroSeExistir(str):
+    """Número para o campo #txtNumero do SEI, preenchido só se o campo existir na tela."""
+
+
 # ==== Helpers genéricos (frames, rede) ====
 
 
@@ -511,19 +515,30 @@ def _proximo_passo(qualidade: int, escala: float) -> tuple[int, float]:
     return qualidade, escala * _FATOR_RESOLUCAO
 
 
+def _gravar(caminho_saida: str, dados: bytes) -> None:
+    with open(caminho_saida, "wb") as arquivo:
+        arquivo.write(dados)
+
+
 def _reduzir_com_pillow(caminho_arquivo: str, caminho_saida: str, limite_bytes: int):
     """
     Reduz com Pillow. Retorna (tamanho, largura, altura, qualidade) do
     arquivo gravado em `caminho_saida`, ou None se não chegou ao limite.
+
+    Cada tentativa é codificada na memória e só a que coube vai para o
+    disco. O redimensionamento (a parte cara) só é refeito quando a
+    escala muda: os degraus de qualidade reaproveitam a mesma imagem.
     """
+    import io
+
     from PIL import Image
 
-    imagem = Image.open(caminho_arquivo)
-    if imagem.mode not in ("RGB", "L"):
-        imagem = imagem.convert("RGB")
+    with Image.open(caminho_arquivo) as aberta:
+        original = aberta.convert("RGB") if aberta.mode not in ("RGB", "L") else aberta.copy()
 
-    largura_original, altura_original = imagem.size
+    largura_original, altura_original = original.size
     qualidade, escala = _QUALIDADE_INICIAL, 1.0
+    escala_pronta, imagem = 1.0, original
 
     for _tentativa in range(_MAX_TENTATIVAS):
         largura = max(1, int(largura_original * escala))
@@ -531,12 +546,15 @@ def _reduzir_com_pillow(caminho_arquivo: str, caminho_saida: str, limite_bytes: 
 
         # Redimensiona sempre a partir do ORIGINAL (e não da tentativa
         # anterior), pra não acumular perda a cada volta.
-        imagem.resize((largura, altura), Image.LANCZOS).save(
-            caminho_saida, format="JPEG", quality=qualidade, optimize=True
-        )
-        tamanho = os.path.getsize(caminho_saida)
+        if escala != escala_pronta:
+            imagem = original.resize((largura, altura), Image.LANCZOS)
+            escala_pronta = escala
+        buffer = io.BytesIO()
+        imagem.save(buffer, format="JPEG", quality=qualidade, optimize=True)
+        tamanho = buffer.tell()
 
         if tamanho <= limite_bytes:
+            _gravar(caminho_saida, buffer.getvalue())
             return tamanho, largura, altura, qualidade
 
         qualidade, escala = _proximo_passo(qualidade, escala)
@@ -553,38 +571,41 @@ def _reduzir_com_pymupdf(caminho_arquivo: str, caminho_saida: str, limite_bytes:
     "página" é medida em PONTOS, não em pixels, então renderizar sem
     matriz encolheria a imagem. Daí o `fator`: quantos pixels do
     arquivo original valem 1 ponto da página -- com ele, escala 1.0
-    devolve exatamente a resolução original.
+    devolve exatamente a resolução original. A página só é desenhada
+    de novo quando a escala muda.
 
     Retorna (tamanho, largura, altura, qualidade), ou None.
     """
     import pymupdf
 
-    documento = pymupdf.open(caminho_arquivo)
-    pagina = documento[0]
+    with pymupdf.open(caminho_arquivo) as documento:
+        pagina = documento[0]
+        # Só para saber o tamanho em pixels: o Pixmap decodificado não
+        # fica guardado durante as tentativas.
+        largura_original = pymupdf.Pixmap(caminho_arquivo).width
+        fator = (largura_original / pagina.rect.width) if pagina.rect.width else 1.0
 
-    pixmap_nativo = pymupdf.Pixmap(caminho_arquivo)
-    largura_original, altura_original = pixmap_nativo.width, pixmap_nativo.height
-    fator = (largura_original / pagina.rect.width) if pagina.rect.width else 1.0
+        qualidade, escala = _QUALIDADE_INICIAL, 1.0
+        escala_pronta, pixmap = None, None
 
-    qualidade, escala = _QUALIDADE_INICIAL, 1.0
+        for _tentativa in range(_MAX_TENTATIVAS):
+            if escala != escala_pronta:
+                pixmap = None  # solta o anterior antes de desenhar o novo
+                pixmap = pagina.get_pixmap(matrix=pymupdf.Matrix(fator * escala, fator * escala))
+                escala_pronta = escala
 
-    for _tentativa in range(_MAX_TENTATIVAS):
-        matriz = pymupdf.Matrix(fator * escala, fator * escala)
-        pixmap = pagina.get_pixmap(matrix=matriz)
+            try:
+                dados = pixmap.tobytes("jpeg", jpg_quality=qualidade)
+            except TypeError:
+                # PyMuPDF antigo, sem o parâmetro de qualidade: sobra só o
+                # controle de resolução.
+                dados = pixmap.tobytes("jpeg")
 
-        try:
-            dados = pixmap.tobytes("jpeg", jpg_quality=qualidade)
-        except TypeError:
-            # PyMuPDF antigo, sem o parâmetro de qualidade: sobra só o
-            # controle de resolução.
-            dados = pixmap.tobytes("jpeg")
+            if len(dados) <= limite_bytes:
+                _gravar(caminho_saida, dados)
+                return len(dados), pixmap.width, pixmap.height, qualidade
 
-        if len(dados) <= limite_bytes:
-            with open(caminho_saida, "wb") as arquivo:
-                arquivo.write(dados)
-            return len(dados), pixmap.width, pixmap.height, qualidade
-
-        qualidade, escala = _proximo_passo(qualidade, escala)
+            qualidade, escala = _proximo_passo(qualidade, escala)
 
     return None
 
@@ -1286,7 +1307,41 @@ def _confirmar_imagens_persistidas(
 # ==== Inclusão de documento no SEI ====
 
 
-def _incluir_documento(aba_sei, texto_link: str, rotulo: str, numero_pp: str = None):
+TENTATIVAS_FORMULARIO = 3
+LIMITE_NOME_ARVORE = 50   # maxlength do #txtNomeArvore do SEI
+
+
+def _preencher_formulario_documento(frame_tipo, numero_pp, nome_arvore: str = "") -> None:
+    """
+    Nível de acesso Restrito + Hipótese Legal (e o Número, quando pedido).
+    `nome_arvore` (só a NE usa) vai no #txtNomeArvore; em branco, o campo fica vazio.
+    Repetir é seguro.
+    """
+    # "Nenhum" e depois "Restrito" -- é o clique em "Restrito" que faz
+    # aparecer o combo de Hipótese Legal logo depois.
+    if not frame_tipo.locator("#optNenhum").is_checked():
+        frame_tipo.locator('label.infraRadioLabel[for="optNenhum"]').click()
+    if numero_pp is not None:
+        campo_numero = frame_tipo.locator("#txtNumero").first
+        if isinstance(numero_pp, NumeroSeExistir):
+            # NE: o SEI pode não ter o campo, ou tê-lo oculto/somente leitura
+            # (numeração automática) -- nesses casos segue sem preencher.
+            if campo_numero.count() and campo_numero.is_visible() and campo_numero.is_editable():
+                campo_numero.fill(numero_pp, timeout=5000)
+        else:
+            campo_numero.fill(numero_pp)
+    if not frame_tipo.locator("#optRestrito").is_checked():
+        frame_tipo.locator('label.infraRadioLabel[for="optRestrito"]').click()
+    frame_tipo.locator("#selHipoteseLegal").select_option("3")  # Documento Preparatório
+    if nome_arvore:
+        campo_nome = frame_tipo.locator("#txtNomeArvore").first
+        if campo_nome.count():
+            campo_nome.fill(nome_arvore[:LIMITE_NOME_ARVORE], timeout=5000)
+        else:  # o nome é só um rótulo na árvore: sem o campo, o documento entra assim mesmo
+            print("   ⚠️  O SEI não mostrou o campo 'Nome na Árvore'; o documento segue sem o nome.")
+
+
+def _incluir_documento(aba_sei, texto_link: str, rotulo: str, numero_pp: str = None, nome_arvore: str = ""):
     """
     Clica em "Incluir Documento" e depois no link `texto_link` (ex:
     "Despesa Certificada", "NL - Nota de Lançamento"), preenche Nível
@@ -1347,14 +1402,34 @@ def _incluir_documento(aba_sei, texto_link: str, rotulo: str, numero_pp: str = N
     locator_tipo.click()
     _aguardar_rede(aba_sei)
 
-    # "Nenhum" e depois "Restrito" -- é o clique em "Restrito" que faz
-    # aparecer o combo de Hipótese Legal logo depois.
-    frame_tipo.locator('label.infraRadioLabel[for="optNenhum"]').click()
-    if numero_pp is not None:
-        frame_tipo.locator("#txtNumero").fill(numero_pp)
-    frame_tipo.locator('label.infraRadioLabel[for="optRestrito"]').click()
-
-    frame_tipo.locator("#selHipoteseLegal").select_option("3")  # Documento Preparatório
+    # O SEI às vezes recria o iframe do formulário logo depois de um clique
+    # (o frame que tínhamos vira "detached"). Quando isso acontece, acha o
+    # formulário de novo e refaz o preenchimento; os passos são idempotentes.
+    seletor_nenhum = 'label.infraRadioLabel[for="optNenhum"]'
+    for tentativa in range(1, TENTATIVAS_FORMULARIO + 1):
+        try:
+            _preencher_formulario_documento(frame_tipo, numero_pp, nome_arvore)
+            break
+        except PlaywrightError as erro:
+            perdeu_frame = any(t in str(erro).lower() for t in ("detach", "context was destroyed"))
+            if not perdeu_frame or tentativa == TENTATIVAS_FORMULARIO:
+                raise
+            _diag(f"formulário recriado pelo SEI (tentativa {tentativa}): {erro}".splitlines()[0])
+            print("   ↻ O SEI recarregou o formulário; procurando de novo e continuando...")
+            aba_sei.wait_for_timeout(1500)
+            _aguardar_rede(aba_sei, 8000)
+            frame_tipo, _, _ = _procurar_lugar(aba_sei, CANDIDATOS_FRAMES, seletor_nenhum, timeout=8000)
+            if frame_tipo is None:   # voltou para a lista de tipos: escolhe o tipo de novo
+                frame_tipo, locator_tipo, _ = _procurar_lugar(
+                    aba_sei, CANDIDATOS_FRAMES, f'a.ancoraOpcao:text-is("{texto_link}")', timeout=3000
+                )
+                if frame_tipo is None:
+                    raise
+                locator_tipo.click()
+                _aguardar_rede(aba_sei, 8000)
+                frame_tipo, _, _ = _procurar_lugar(aba_sei, CANDIDATOS_FRAMES, seletor_nenhum, timeout=8000)
+                if frame_tipo is None:
+                    raise
 
     return frame_tipo
 
@@ -1685,7 +1760,8 @@ def _esperar_editor(context, aba_sei, abas_novas, antes, visto, inicio):
 
 
 def _incluir_e_editar_documento(
-    context, aba_sei, texto_link: str, rotulo: str, numero_pp: str = None, antes_de_criar=None
+    context, aba_sei, texto_link: str, rotulo: str, numero_pp: str = None, antes_de_criar=None,
+    nome_arvore: str = "",
 ):
     """
     _incluir_documento() + clica em "Salvar" e espera a nova aba do
@@ -1702,7 +1778,7 @@ def _incluir_e_editar_documento(
     _diag_ambiente(context)
     _diag(f"=== '{texto_link}' · diagnóstico v3 · aba SEI: {aba_sei.url}")
     try:
-        frame_tipo = _incluir_documento(aba_sei, texto_link, rotulo, numero_pp=numero_pp)
+        frame_tipo = _incluir_documento(aba_sei, texto_link, rotulo, numero_pp=numero_pp, nome_arvore=nome_arvore)
     except BaseException as erro:
         _diag(f"FALHOU ANTES do Salvar (preencher o formulário): {type(erro).__name__}: {erro}")
         raise
@@ -1897,7 +1973,7 @@ def _reabrir_editor(context, url: str):
 def _anexar_documento(
     context, aba_sei, progresso: ProgressoSei, avisos: list,
     chave: str, descricao: str, texto_link: str, rotulo: str, arquivos: list[str],
-    numero_pp: str = None,
+    numero_pp: str = None, nome_arvore: str = "",
 ) -> None:
     """
     Inclui UM documento no SEI e cola as imagens nele, sabendo retomar.
@@ -1948,7 +2024,7 @@ def _anexar_documento(
     if total_partes == 1:
         _anexar_parte(
             context, aba_sei, progresso, avisos, chave, descricao, texto_link, rotulo, partes[0],
-            numero_pp=numero_pp,
+            numero_pp=numero_pp, nome_arvore=nome_arvore,
         )
         return
 
@@ -1991,13 +2067,14 @@ def _anexar_documento(
             context, aba_sei, progresso, avisos,
             f"{chave} · parte {indice}/{total_partes}", f"{descricao} (parte {indice}/{total_partes})",
             texto_link, rotulo, parte, numero_pp=numero_pp, extra_progresso={"partes": total_partes},
+            nome_arvore=nome_arvore,
         )
 
 
 def _anexar_parte(
     context, aba_sei, progresso: ProgressoSei, avisos: list,
     chave: str, descricao: str, texto_link: str, rotulo: str, arquivos: list[str],
-    numero_pp: str = None, extra_progresso: dict = None,
+    numero_pp: str = None, extra_progresso: dict = None, nome_arvore: str = "",
 ) -> None:
     """
     Inclui UM documento no SEI (ou uma parte dele) e cola as imagens
@@ -2042,6 +2119,7 @@ def _anexar_parte(
         pagina_editor = _incluir_e_editar_documento(
             context, aba_sei, texto_link, rotulo, numero_pp=numero_pp,
             antes_de_criar=lambda: progresso.marcar(chave, "criando", **extra),
+            nome_arvore=nome_arvore,
         )
         progresso.marcar(chave, "criado", url_editor=pagina_editor.url, **extra)
 

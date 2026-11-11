@@ -266,6 +266,10 @@ def diagnosticar(incluir_rede: bool = True) -> list[ItemDiagnostico]:
                         OK if v_pw else ERRO, "" if v_pw else "Necessário para gerar e anexar os DAREs."))
     if v_pw:
         add(_testar_motor_automacao())
+    v_pdf = _versao_pacote("pypdf")
+    add(ItemDiagnostico("Componentes", "pypdf (juntar PDFs)", v_pdf or "não instalado",
+                        OK if v_pdf else AVISO,
+                        "" if v_pdf else "Sem ele, os DAREs do mesmo processo são anexados um a um no SEI."))
     exe = navegador.localizar_chrome()
     if exe:
         nome = navegador.nome_navegador(exe)
