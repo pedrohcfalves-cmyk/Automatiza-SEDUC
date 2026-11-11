@@ -1,0 +1,2 @@
+CKEditor 4.22.1 (npm "ckeditor4"), só os arquivos que o SEI simulado dos testes usa.
+Licença: LICENSE.md (GPL/LGPL/MPL). Não é usado pela automação, só por testes/simulador_sei.py.

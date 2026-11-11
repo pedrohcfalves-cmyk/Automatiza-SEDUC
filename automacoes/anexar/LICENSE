@@ -1,0 +1,126 @@
+LICENÇA PROPRIETÁRIA — TODOS OS DIREITOS RESERVADOS
+PROPRIETARY LICENSE — ALL RIGHTS RESERVED
+
+Copyright (c) 2026 Pedro Henrique Carpina Farias Alves (pessoal). Todos os direitos reservados.
+Software: Anexar Documentos -- versão 1.2.0 e todas as anteriores e posteriores.
+
+------------------------------------------------------------------------
+PORTUGUÊS
+------------------------------------------------------------------------
+
+1. TITULARIDADE
+   Este software ("Software"), incluindo o código-fonte, scripts,
+   documentação, a interface do aplicativo (app.py, a pasta anexar/
+   inteira -- automacao/, aplicativo/, janela/ e sistema/ --,
+   instalador/construir.py e os arquivos .bat) e demais arquivos deste
+   repositório, é de titularidade
+   exclusiva do autor, em caráter pessoal. O Software NÃO pertence à
+   Secretaria de Estado de Finanças de Rondônia (SEFIN-RO), nem a
+   qualquer outro órgão ou entidade pública ou privada, e não é
+   distribuído em nome deles.
+
+2. RESERVA DE DIREITOS
+   Todos os direitos não expressamente concedidos por escrito pelo autor
+   ficam reservados. Este Software não é software livre nem de código
+   aberto, e nenhuma licença é concedida por implicação, por
+   disponibilização do código ou por seu uso no passado.
+
+3. PROIBIÇÕES
+   Sem autorização prévia e por escrito do autor, é proibido:
+   a) copiar, reproduzir ou armazenar o Software, no todo ou em parte,
+      exceto o estritamente necessário para consulta pelo autor;
+   b) modificar, adaptar, traduzir ou criar obras derivadas;
+   c) distribuir, publicar, sublicenciar, vender, alugar, emprestar ou
+      de qualquer forma disponibilizar o Software a terceiros;
+   d) executar o Software em ambiente de terceiros ou para fins
+      diferentes dos autorizados pelo autor;
+   e) remover ou alterar avisos de direitos autorais ou de titularidade.
+
+4. AUTORIZAÇÃO DE USO
+   Qualquer autorização de uso, cópia ou modificação só é válida se
+   concedida por escrito e assinada pelo autor, e se limita aos termos
+   nela previstos.
+
+5. AUSÊNCIA DE GARANTIA
+   O Software é fornecido "NO ESTADO EM QUE SE ENCONTRA", sem garantia de
+   qualquer tipo, expressa ou implícita, incluindo, sem limitação,
+   garantias de adequação a uma finalidade específica, de
+   funcionamento ininterrupto ou de ausência de erros. O Software
+   automatiza operações em sistemas externos (SEI e SIGEF), inclusive em
+   ambiente de produção; o usuário autorizado é o único responsável por
+   conferir os resultados e pelos atos praticados com o seu uso.
+
+6. LIMITAÇÃO DE RESPONSABILIDADE
+   Na máxima extensão permitida pela lei, o autor não responde por danos
+   diretos, indiretos, incidentais ou consequenciais decorrentes do uso
+   ou da impossibilidade de uso do Software.
+
+7. MARCAS E SISTEMAS DE TERCEIROS
+   SEI, SIGEF e demais nomes citados pertencem aos seus respectivos
+   titulares e são mencionados apenas para identificar os sistemas com
+   os quais o Software interage. Esta licença não concede nenhum direito
+   sobre eles.
+
+8. LEI APLICÁVEL
+   Esta licença é regida pelas leis da República Federativa do Brasil,
+   em especial a Lei nº 9.609/1998 (Lei do Software) e a Lei nº
+   9.610/1998 (Lei de Direitos Autorais).
+
+9. DADOS DE USO E ESTUDOS SOBRE A AUTOMAÇÃO
+   a) Os registros gerados pelo Software durante o uso (pasta
+      dados/relatorios/: tempos, etapas e contagens de documentos) ficam
+      somente no computador em que foram gerados. O Software não envia
+      esses dados a nenhum servidor. As estimativas de tempo à mão
+      (anexar/aplicativo/estimativas_manuais.py) fazem parte do código e seguem esta
+      licença.
+   b) Esses registros podem conter números de processo e valores
+      reais. Quem os compartilhar responde pelo cumprimento da Lei nº
+      13.709/2018 (LGPD) e das normas do órgão onde foram gerados; a
+      exportação do aplicativo oferece a opção de retirar o número do
+      processo.
+   c) Fica autorizada a publicação de resultados AGREGADOS e
+      ANONIMIZADOS desses registros (médias, totais, gráficos) em
+      estudos, relatórios e trabalhos acadêmicos, desde que o Software
+      seja citado assim: "Anexar Documentos, versão X.Y.Z, de Pedro
+      Henrique Carpina Farias Alves (2026)". Esta autorização não se
+      estende ao código-fonte, que continua sujeito às cláusulas 2 a 4.
+
+10. COMPONENTES DE TERCEIROS
+   O Software usa bibliotecas de terceiros (por exemplo Playwright,
+   PyMuPDF, Pillow e PySide6, listadas em requirements.txt, e o CKEditor 4 usado
+   apenas nos testes), cada uma regida pela sua própria licença. O
+   instalador (Setup.exe, gerado por instalador/construir.py) também leva o
+   interpretador Python (licença da Python Software Foundation), o Qt/PySide6
+   (LGPL) e essas bibliotecas, que continuam com as licenças originais. Esta
+   licença não altera nem substitui as licenças desses componentes.
+
+Contato para solicitar autorização: pedrohcfalves@gmail.com
+
+------------------------------------------------------------------------
+ENGLISH (courtesy summary — the Portuguese text prevails)
+------------------------------------------------------------------------
+
+Copyright (c) 2026 Pedro Henrique Carpina Farias Alves (personal). All rights reserved.
+
+This Software is proprietary and personally owned by its author. It is
+NOT owned by, or licensed on behalf of, SEFIN-RO or any other agency or
+organization. No permission is granted to use, copy, modify, merge,
+publish, distribute, sublicense, sell or otherwise make the Software
+available to third parties without the author's prior written
+authorization. All rights not expressly granted are reserved.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED. THE SOFTWARE AUTOMATES ACTIONS IN EXTERNAL SYSTEMS, INCLUDING
+PRODUCTION ENVIRONMENTS; AUTHORIZED USERS ARE SOLELY RESPONSIBLE FOR
+VERIFYING RESULTS. TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE AUTHOR
+SHALL NOT BE LIABLE FOR ANY CLAIM OR DAMAGES ARISING FROM THE USE OF THE
+SOFTWARE.
+
+Usage records created by the Software (relatorios/ folder) stay on the
+local computer and are never sent anywhere. Aggregated, anonymized
+results derived from them may be published in studies and academic
+work, provided the Software is cited as "Anexar Documentos, version
+X.Y.Z, by Pedro Henrique Carpina Farias Alves (2026)". This permission does not extend to the source
+code. Third-party libraries keep their own licenses.
+
+Contact: pedrohcfalves@gmail.com
