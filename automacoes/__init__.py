@@ -2,6 +2,8 @@
 As automações do sistema, uma pasta para cada:
 
     sigef_sei/   baixa CE, NL, PP e OB do SIGEF e anexa no processo do SEI
+    ne/          baixa a Nota de Empenho do SIGEF e anexa no processo do SEI
+    dare/        gera o DARE avulso, salva o PDF e anexa no SEI
     bb/          carga de cartões no portal do Banco do Brasil
 
 As portas de entrada ficam na raiz do projeto: main.py (tela preta) e
