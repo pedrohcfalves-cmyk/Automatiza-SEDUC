@@ -76,3 +76,31 @@ debug_html/
 # Cópias de segurança feitas antes de uma alteração
 # (ex.: etapa_sei2.py.bak_antes_divisao)
 *.bak_*
+
+# Logs e capturas de diagnóstico: carregam endereços do SEI (com o
+# infra_hash da sessão), números de processo, nome do computador e caminhos
+# com o login do Windows. Normalmente ficam em Documentos\Automacao
+# SIGEF-SEI, mas LBA_PASTA_DADOS pode apontar pra cá.
+diagnostico_salvar.log
+falha_editor_*.png
+registro_*.txt
+construir_log.txt
+*.log
+
+# Segredos: variáveis de ambiente e certificados digitais com chave privada
+.env
+.env.*
+*.pfx
+*.p12
+
+# Dados dos cenários da NE rodados à mão (o rodar_cenarios.py usa uma pasta temporária)
+testes/ne/_dados/
+
+# Anexar Documentos rodado à mão pelo código (python -m automacoes.anexar...): a pasta dados/
+# dele cairia aqui. Na janela ela fica em Documentos\Anexar Documentos.
+/dados/
+
+# Backups e pacotes gerados à mão (não são código)
+Claude outputs/
+*.tgz
+*.b64

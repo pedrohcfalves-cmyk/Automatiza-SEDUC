@@ -28,13 +28,18 @@
         baixados, com Nivel de Acesso Restrito e hipotese legal
         "Documento Preparatorio".
 
+  Na janela da Central, o mesmo caminho serve tambem a NOTA DE
+  EMPENHO (NE): a partir do numero da NE, o programa imprime a
+  Nota de Empenho no SIGEF e a anexa no processo como
+  "NE - Nota de Empenho". Veja a parte "NOTA DE EMPENHO" abaixo.
+
 ------------------------------------------------------------------
   O QUE ESTE PROGRAMA NAO FAZ
 ------------------------------------------------------------------
 
   O programa NAO gera, NAO cria, NAO altera e NAO exclui nenhum
-  documento. A CE, a NL, a PP e a OB precisam JA EXISTIR no SIGEF
-  antes de voce executa-lo.
+  documento. A CE, a NL, a PP, a OB e a NE precisam JA EXISTIR no
+  SIGEF antes de voce executa-lo.
 
   A funcao dele e apenas CONSULTAR, BAIXAR e ANEXAR.
   Nenhum lancamento e feito no SIGEF.
@@ -184,6 +189,78 @@
   python main.py lista.xlsx
 
 ------------------------------------------------------------------
+  NOTA DE EMPENHO (NE)  -  na janela da Central
+------------------------------------------------------------------
+
+  A NE tem a SUA aba na barra da esquerda: NOTA DE EMPENHO,
+  separada do "Anexar no SEI" (que e so da OB).
+
+  1) Clique em NOTA DE EMPENHO, na barra da esquerda.
+
+  2) Clique em "Abrir o navegador da automacao", entre no SIGEF
+     e no SEI (se ja entrou pela OB, o login continua valendo) e
+     confirme.
+
+  3) Informe o processo e a NE. Se quiser, escreva tambem o
+     "Nome na arvore do processo" (ate 50 letras): ele vai no
+     campo "Nome na Arvore" do SEI. Em branco, fica vazio.
+     A NE pode ser digitada inteira (2026NE000123) ou so o
+     numero (123). NE de outro ano nao
+     serve: a tela do SIGEF e a do ano escolhido em "Ano do
+     SIGEF" (veja abaixo).
+
+  4) Clique em "Baixar e anexar". O programa imprime a NE no
+     SIGEF, transforma cada pagina em imagem e inclui no processo
+     como "NE - Nota de Empenho", Restrito, "Documento
+     Preparatorio". Depois vem a conferencia, como na OB.
+
+  VARIAS NEs: em "Varias NEs", escolha a planilha ou cole a
+  lista, uma NE por linha, com o processo e a NE:
+
+     0029.001947/2026-67   2026NE000123
+     0029001948202611      000124
+
+  Sem o "2026NE" na frente, escreva a NE com os zeros (000124).
+  Numa planilha com uma coluna chamada "NE", vale o numero sem
+  zeros tambem.
+
+  SE O DOWNLOAD DA NE NAO VIER ("Insecure download blocked"):
+  feche TODAS as janelas do Chrome da automacao e abra o programa
+  de novo. Ele reabre o Chrome ja com esse bloqueio desligado.
+
+  O tempo de cada NE vai para metricas\metricas_ne.csv. O botao
+  "Relatorio das NEs", na aba da NE, monta o relatorio delas.
+
+  A OB e a NE usam o mesmo Chrome: enquanto uma roda, a outra
+  espera.
+
+  Pela tela preta: python -m automacoes.ne.terminal
+
+------------------------------------------------------------------
+  ANO DO SIGEF  (vale para todas as abas)
+------------------------------------------------------------------
+
+  No rodape da barra lateral, "Ano do SIGEF" diz de que exercicio
+  o programa abre as telas do SIGEF (OB e NE). Ja vem com o ano
+  atual. Se o SIGEF ainda nao virou o ano (comeco de janeiro),
+  escolha o ano anterior; quando ele virar, escolha o ano atual
+  de novo. Nao da para trocar com uma automacao rodando.
+  O DARE e o BB nao usam este ano.
+
+------------------------------------------------------------------
+  PAINEL DE RESULTADOS
+------------------------------------------------------------------
+
+  O botao "Painel de resultados", na barra lateral, junta OB, NE
+  e DARE numa pagina so: tempo economizado no total, por mes e
+  por pessoa. Escolha o periodo e quantos minutos cada um leva
+  feito a mao, e clique em "Gerar e abrir".
+
+  Para somar a equipe: em "Incluir a pasta de outra pessoa",
+  escolha a pasta Documentos do colega (copiada ou na rede). O
+  programa lembra as pastas para a proxima vez.
+
+------------------------------------------------------------------
   AVISO IMPORTANTE  -  CONFERENCIA OBRIGATORIA
 ------------------------------------------------------------------
 
@@ -215,6 +292,12 @@
   processo do SEI. Diferente do SIGEF -> SEI, este modulo GERA um
   documento: o DARE. Um lancamento = um DARE.
 
+  Varios DAREs do MESMO processo: o programa gera todos, junta os
+  PDFs num arquivo so (DARE_JUNTADO_<processo>_<N>-DAREs_<data>.pdf,
+  na mesma pasta) e anexa so esse arquivo no SEI, uma vez por
+  processo. Os PDFs individuais continuam na pasta. Na lista, os
+  lancamentos do mesmo processo ficam um depois do outro.
+
   1) Abra a janela da Central e clique em DARE, na barra da
      esquerda. Aparecem as paginas: Inicio, Lancamentos, Execucao,
      Arquivos PDF, Desempenho e Configuracoes.
@@ -239,6 +322,76 @@
   Os PDFs, o historico e os pendentes ficam em
   Documentos\DARE Automacao -- a mesma pasta do aplicativo DARE
   antigo. Quem ja usava o DARE encontra tudo la.
+
+------------------------------------------------------------------
+  MODULO ANEXAR DOCUMENTOS (na janela da Central)
+------------------------------------------------------------------
+
+  E o antigo programa "Anexar Documentos", agora dentro da
+  Central. ATENCAO: este modulo FAZ documentos no SIGEF de
+  producao -- a CE, a NL e a PP de cada lancamento e UMA OB para
+  o lote -- e depois baixa os relatorios e anexa no processo do
+  SEI. Tudo que ele gerar vale de verdade.
+
+  1) Clique em Anexar Documentos, na barra da esquerda. Aparece
+     o menu dele: Inicio, Fazer um processo, Configuracoes,
+     Estatisticas, Relatorio do mes e Ajuda e licenca.
+
+  2) Primeira vez? Marque "Modo treino" no menu e faca um
+     processo de mentira: as telas sao as mesmas, mas nada e
+     feito no SEI nem no SIGEF.
+
+  3) Em "Fazer um processo", clique em Comecar. Quando o quadro
+     ficar AMARELO e a sua vez: leia e clique num dos botoes
+     (entrar no SEI e no SIGEF, o numero do processo, a tabela
+     dos dados com os lancamentos, "Confira os dados").
+
+  4) Enquanto ele trabalha, nao mexa no Chrome. O quadro mostra o
+     que esta sendo feito e, ao lado, as NL, PP e OB que saem.
+     Se voce estiver em outro modulo, o Anexar Documentos fica com
+     um ponto amarelo na barra e aparece "Sua vez".
+
+  5) No fim, confira no SEI e assine. O programa nao assina nada.
+     Parou no meio? Comece de novo com o MESMO processo: ele faz so
+     o que faltou.
+
+  O Chrome e o mesmo das outras automacoes (um login so) e o ano
+  do SIGEF e o do rodape da barra lateral. Enquanto outra
+  automacao estiver usando o Chrome, o processo de verdade nao
+  comeca (o Modo treino comeca, porque nao usa o Chrome).
+
+  Os dados (configuracoes, ultimo processo, estatisticas) ficam
+  em Documentos\Anexar Documentos; os JPGs baixados, em
+  Downloads\Anexar Documentos. Na primeira vez, o que o Anexar
+  Documentos instalado ja tinha e copiado para la.
+
+------------------------------------------------------------------
+  MODULO CADASTRO DE CREDORES (na janela da Central)
+------------------------------------------------------------------
+
+  E o antigo programa "Cadastro de Credores no SIGEF"
+  (CadastroSIGEF), agora dentro da Central. Para cada pessoa:
+  procura o CPF no cadastro de credores do SIGEF; se nao existir,
+  cadastra o credor; depois grava a conta bancaria (domicilio).
+
+  1) Clique em Cadastro de Credores, na barra da esquerda, e em
+     Comecar. O programa abre o Chrome da automacao no SIGEF.
+
+  2) Entre no SIGEF e clique em "Ja entrei no SIGEF".
+
+  3) Escolha "Planilha do Excel" (o resultado de cada pessoa e
+     escrito na propria planilha) ou "Digitar ou colar".
+
+  4) Escolha se quer conferir cada pessoa antes de gravar e
+     clique em "Comecar o cadastro". "Parar o cadastro" termina a
+     pessoa atual e para.
+
+  5) No fim, as pessoas com erro ficam guardadas: "Refazer as que
+     deram erro" tenta de novo so com elas.
+
+  Letra maior / Letra menor e Ajuda (F1) ficam no alto do modulo.
+  As estatisticas e os registros continuam em .sigef-automacao,
+  na pasta do usuario -- os mesmos do programa antigo.
 
 ------------------------------------------------------------------
   SE DER ALGUM PROBLEMA
@@ -305,8 +458,9 @@
     requirements.txt ........ bibliotecas necessarias
     main.py ................. PONTO DE ENTRADA da tela preta. Menus,
                               perguntas e a ordem das etapas
-    app_janela.py ........... PONTO DE ENTRADA da janela (as tres
-                              automacoes: SIGEF-SEI, DARE e BB)
+    app_janela.py ........... PONTO DE ENTRADA da janela (as
+                              automacoes, cada uma na sua aba:
+                              SIGEF-SEI, NE, DARE e BB)
 
     automacoes\ ............. uma pasta para cada automacao:
 
@@ -322,14 +476,18 @@
         metricas.py .......... tempo de cada OB (metricas.csv)
         relatorio_gerencial.py relatorio de tempo economizado
 
+      ne\ ................... Nota de Empenho -> SEI (etapa.py faz
+                               uma NE; lote.py varias; terminal.py
+                               roda sem a janela)
       dare\ ................. DARE avulso -> PDF -> SEI (motor.py
                                faz a rodada; terminal.py roda sem
                                a janela)
       bb\automacoes_bb.py .... cargas de cartao no portal do BB
 
     janela\ ................. a tela da janela (interface\), a
-                              ligacao do BB e do DARE com ela
-                              (modulos_janela.py, modulo_dare.py) e a
+                              ligacao do BB, da NE e do DARE com ela
+                              (modulos_janela.py, modulo_ne.py,
+                              modulo_dare.py) e a
                               licenca (licenca.py)
     LICENCA.txt ............. termo de uso mostrado na instalacao
     testes\ ................. testes que rodam sem navegador
@@ -351,7 +509,7 @@
 
       python main.py          (ou duplo clique no
                                AUTOMACAO SIGEF-SEI)
-      python app_janela.py    a janela, com as tres automacoes
+      python app_janela.py    a janela, com as quatro automacoes
 
   RODAR SO UMA PARTE
 
@@ -361,10 +519,20 @@
       python -m automacoes.sigef_sei.etapa_sei2
           anexa um processo ja baixado, sem repetir o download
 
+      python -m automacoes.ne.terminal
+          a Nota de Empenho pela tela preta
+
   TESTES
 
       python testes\testes_divisao.py
+      python testes\teste_escolha_documentos.py
       python -m unittest discover -s testes\dare -t .
+      python -m unittest discover -s testes\ne -t .
+      python testes\teste_janela_demo.py
+      python testes\ne\rodar_cenarios.py
+
+    Os dois ultimos precisam do Chromium do Playwright
+    (python -m playwright install chromium).
 
   VERSAO
 
