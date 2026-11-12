@@ -91,7 +91,7 @@ automacoes/               AS AUTOMAÇÕES — uma pasta para cada
 │   ├── metricas.py              cronômetro de cada OB → metricas/metricas.csv
 │   └── relatorio_gerencial.py   relatório HTML de tempo economizado
 ├── geral.py              o que vale para todas: config.json e o ano do SIGEF (url_sigef, ano_sigef)
-├── painel.py             painel de resultados: OB, NE e DARE juntos (total, por mês, por pessoa)
+├── painel.py             Relatório geral: OB, NE e DARE juntos (total, por mês, por pessoa)
 ├── ne/                   Nota de Empenho → SEI (usa as peças do sigef_sei/)
 │   ├── etapa.py                 uma NE: imprime no SIGEF, PDF → PNG, anexa no SEI (processar_ne)
 │   ├── lote.py                  várias NEs de uma vez, a partir de planilha/lista
@@ -134,7 +134,7 @@ janela/                   A JANELA (usada pelo app_janela.py)
 testes/
 ├── testes_divisao.py     testes offline da divisão de anexos (limite de 2 MB do SEI)
 ├── teste_janela_demo.py  a página da janela clicada como um usuário (OB e NE, um processo e lote)
-├── geral/                ano do SIGEF e painel de resultados (offline)
+├── geral/                ano do SIGEF e Relatório geral (offline)
 ├── ne/                   NE: ponte com a janela (offline) e cenários contra SIGEF/SEI simulados
 └── dare/                 testes offline do DARE (validações, planilha, limpeza, motor, ponte com a janela)
 
@@ -246,14 +246,13 @@ parou; se persistir, o item fica como erro e o lote segue. OB já anexada
 numa rodada anterior é anexada de novo, com aviso para excluir o que
 ficar em dobro. Cada lote grava um relatório `.csv` em `lotes/`.
 
-### Métricas, relatório das OBs e painel de resultados
+### Métricas e Relatório geral
 
 Cada OB vira uma linha em `metricas/metricas.csv` (tempo no SIGEF, no
-SEI, documentos, tentativas). Pelo botão **Relatório das OBs** da
-janela sai uma página HTML com indicadores e gráficos do período,
-incluindo o tempo economizado frente ao trabalho manual.
+SEI, documentos, tentativas).
 
-O botão **Painel de resultados** junta OB, NE e DARE: tempo economizado
+O botão **Relatório geral** (barra lateral) junta OB, NE e DARE numa página
+HTML com indicadores e gráficos do período: tempo economizado
 no total, por mês e por pessoa (economizado = concluídos × minutos à mão −
 tempo de todas as rodadas, inclusive as que falharam). Lê as métricas que
 já existem: `metricas.csv` (e os `metricas_ate_*.csv` antigos),
@@ -362,7 +361,7 @@ aplicativo DARE, na barra lateral:
 | Lançamentos      | formulário (valida ao sair do campo), lista com editar/duplicar/remover, **Importar planilha** |
 | Execução         | progresso por lançamento e por etapa, tempo restante, registro, parar após o atual |
 | Arquivos PDF     | limpeza por idade, data, seleção ou tudo (Lixeira ou de vez), limpeza automática |
-| Desempenho       | tempos por etapa, monitor do computador, diagnóstico, testes de velocidade, relatório |
+| Diagnóstico      | monitor do computador, diagnóstico do sistema, testes de velocidade, exportar tempos (CSV); as estatísticas dos lançamentos ficam no Relatório geral |
 | Configurações    | versão, navegador, pastas, valores fixos, guia de uso e licença           |
 
 Atalhos (com o DARE aberto): **Ctrl+N** novo lançamento, **Ctrl+I**
@@ -524,7 +523,7 @@ SIGEF/SEI/DARE. Cobrem a divisão dos anexos em partes (limite de 2 MB do
 SEI), a largura da imagem da OB, a escolha dos documentos, no DARE as
 validações, a leitura de planilhas, a limpeza de PDFs, os eventos do motor
 e a ponte com a janela, na NE a ponte com a janela (Api e Trabalhador), e o ano do SIGEF e o
-painel de resultados.
+Relatório geral.
 
 Os dois últimos usam um Chromium sem tela: o `teste_janela_demo.py` clica
 na página da janela no modo demonstração (OB e NE, um processo e lote, o

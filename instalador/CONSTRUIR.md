@@ -35,8 +35,10 @@ Sai em `dist/`:
 
 ```
 dist/Automacao SIGEF-SEI/                  o programa, sem instalador
-dist/Instalar Automacao SIGEF-SEI 3.7.exe  o que se leva para as máquinas
+dist/Instalar Automacao SIGEF-SEI <versão>.exe  o que se leva para as máquinas
 ```
+
+A `<versão>` vem de `VERSAO` em `main.py`.
 
 Instalar uma versão nova por cima da antiga substitui o programa (o
 `AppId` do `instalador.iss` é o que liga as duas — não mude).

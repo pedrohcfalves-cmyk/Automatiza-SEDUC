@@ -64,6 +64,17 @@
 <h1>DARE automação</h1>
 <p class="sub">Guia de uso passo a passo, para quem não é da área de informática</p>
 
+<div class="caixa atencao">
+  <strong class="titulo">Este guia descreve a versão antiga, em janela preta (terminal)</strong>
+  Hoje o DARE é uma tela dentro do programa <b>Automação SIGEF-SEI</b>: abra o programa pelo atalho (ou pelo
+  <code>AUTOMACAO SIGEF-SEI.exe</code>) e clique em <b>DARE</b> na barra da esquerda. As páginas são
+  <b>Início</b>, <b>Lançamentos</b>, <b>Execução</b>, <b>Arquivos PDF</b>, <b>Diagnóstico</b> e <b>Configurações</b>.
+  Em <b>Lançamentos</b>, preencha os dados e clique em <b>Adicionar à lista</b> (ou use <b>Importar planilha</b>);
+  depois, <b>Iniciar processamento</b> e acompanhe em <b>Execução</b>. As regras dos dados (CPF, CNPJ, mês de
+  referência, vencimento, valor, planilha) continuam as mesmas descritas abaixo; os menus numerados e as teclas
+  da janela preta não existem mais na tela nova.
+</div>
+
 <div class="caixa dica">
   <strong class="titulo">Para que serve este programa?</strong>
   Ele faz sozinho um trabalho que você faria com muitos cliques: <b>(1)</b> preenche o DARE no site da Sefin,
@@ -130,14 +141,10 @@
   <li><b>Coloque a pasta do programa em um lugar fácil.</b><br>
       Copie a pasta <code>DARE e Anexar</code> para <b>Documentos</b> (evite deixar em "Downloads").
       Não mude o nome dos arquivos que estão dentro dela.</li>
-  <li><b>Instale o Python</b> (um programa de apoio, gratuito).<br>
-      Abra o site <code>python.org/downloads</code>, clique no botão amarelo <b>Download Python</b> e abra o arquivo baixado.<br>
-      <span class="nao">MUITO IMPORTANTE:</span> na primeira tela, marque a caixinha
-      <b>"Add python.exe to PATH"</b> (ou "Add Python to PATH"). Depois clique em <b>Install Now</b> e espere terminar.</li>
-  <li><b>Instale os componentes do programa.</b><br>
-      Na pasta do programa, dê <b>dois cliques</b> no arquivo <code>instalar.bat</code>.
-      Abrirá uma janela preta com mensagens. Espere até aparecer
-      <b>"PRONTO! Instalação concluída."</b> e aperte qualquer tecla para fechar.</li>
+  <li><b>Instale o programa.</b><br>
+      Dê <b>dois cliques</b> no instalador <code>Instalar Automacao SIGEF-SEI &lt;versão&gt;.exe</code> e siga as telas.
+      Não é preciso instalar o Python à parte. (Quem recebeu a pasta do código em vez do instalador: dois cliques em
+      <code>AUTOMACAO SIGEF-SEI.exe</code>; na primeira vez ele prepara tudo sozinho, com internet.)</li>
 </ol>
 
 <div class="caixa atencao">
@@ -148,15 +155,15 @@
 
 <div class="caixa dica">
   <strong class="titulo">Deixe um atalho na Área de Trabalho</strong>
-  Clique com o <b>botão direito</b> em <code>executar.bat</code> &rarr; <b>Enviar para</b> &rarr;
-  <b>Área de trabalho (criar atalho)</b>. Assim você abre o programa direto da tela inicial.
+  O instalador já cria o atalho. Se você usa a pasta do código, clique com o <b>botão direito</b> em
+  <code>AUTOMACAO SIGEF-SEI.exe</code> &rarr; <b>Enviar para</b> &rarr; <b>Área de trabalho (criar atalho)</b>. Assim você abre o programa direto da tela inicial.
 </div>
 
 <!-- ============================================================ -->
 <h2 id="abrir">3. Como abrir o programa</h2>
 
 <ol class="passos">
-  <li><b>Dê dois cliques em <code>executar.bat</code></b> (ou no atalho da Área de Trabalho).</li>
+  <li><b>Abra o programa pelo atalho</b> da Área de Trabalho (ou por <code>AUTOMACAO SIGEF-SEI.exe</code>).</li>
   <li><b>Vai aparecer uma janela preta com letras.</b> Ela é o "painel" do programa. <u>Não feche</u> essa janela
       enquanto estiver usando.</li>
   <li><b>O Chrome abre sozinho</b>, com duas abas: uma do <b>SEI</b> e outra do <b>DARE</b>.
@@ -478,10 +485,8 @@ Para criar o modelo: no modo planilha, digite <kbd>M</kbd> e <kbd>Enter</kbd>. O
 
 <table>
   <tr><th>O que aconteceu</th><th>O que fazer</th></tr>
-  <tr><td>Ao clicar em <code>executar.bat</code>, a janela abre e fecha na hora, ou diz que não acha o Python.</td>
-      <td>A instalação não foi feita. Dê dois cliques em <code>instalar.bat</code> e siga as mensagens.</td></tr>
-  <tr><td>"Falta instalar uma dependência".</td>
-      <td>Dê dois cliques em <code>instalar.bat</code> (com internet).</td></tr>
+  <tr><td>O programa abre e fecha na hora, ou reclama de biblioteca faltando.</td>
+      <td>Feche e abra de novo pelo atalho (ou por <code>AUTOMACAO SIGEF-SEI.exe</code>), com internet: ele instala o que faltar.</td></tr>
   <tr><td>O Chrome não abriu.</td>
       <td>Feche todas as janelas do Chrome, feche o programa e abra de novo. Se persistir, dê dois cliques em
           <code>iniciar_chrome_debug.bat</code> e depois use o programa.</td></tr>
@@ -497,7 +502,7 @@ Para criar o modelo: no modo planilha, digite <kbd>M</kbd> e <kbd>Enter</kbd>. O
       <td>Ela precisa estar <b>aberta no Excel</b> e com a "Edição habilitada". Digite <kbd>R</kbd> para atualizar a lista,
           ou <kbd>C</kbd> para digitar o caminho do arquivo.</td></tr>
   <tr><td>"A biblioteca pywin32 não está instalada".</td>
-      <td>Dê dois cliques em <code>instalar.bat</code>. O modo planilha precisa do Microsoft Excel.</td></tr>
+      <td>Feche e abra o programa de novo pelo atalho (com internet). O modo planilha precisa do Microsoft Excel.</td></tr>
   <tr><td>Uma linha da planilha foi ignorada.</td>
       <td>A janela mostra o número da linha e o motivo (por exemplo, "CPF inválido"). Corrija na planilha e rode de novo
           só essa linha (escolha a mesma linha como inicial e final).</td></tr>

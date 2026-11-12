@@ -229,7 +229,8 @@
   de novo. Ele reabre o Chrome ja com esse bloqueio desligado.
 
   O tempo de cada NE vai para metricas\metricas_ne.csv. O botao
-  "Relatorio das NEs", na aba da NE, monta o relatorio delas.
+  "Relatorio geral", na aba da NE, abre o relatorio (as NEs junto
+  com as outras automacoes).
 
   A OB e a NE usam o mesmo Chrome: enquanto uma roda, a outra
   espera.
@@ -248,10 +249,10 @@
   O DARE e o BB nao usam este ano.
 
 ------------------------------------------------------------------
-  PAINEL DE RESULTADOS
+  RELATORIO GERAL
 ------------------------------------------------------------------
 
-  O botao "Painel de resultados", na barra lateral, junta OB, NE
+  O botao "Relatorio geral", na barra lateral, junta OB, NE
   e DARE numa pagina so: tempo economizado no total, por mes e
   por pessoa. Escolha o periodo e quantos minutos cada um leva
   feito a mao, e clique em "Gerar e abrir".
@@ -300,7 +301,7 @@
 
   1) Abra a janela da Central e clique em DARE, na barra da
      esquerda. Aparecem as paginas: Inicio, Lancamentos, Execucao,
-     Arquivos PDF, Desempenho e Configuracoes.
+     Arquivos PDF, Diagnostico e Configuracoes.
 
   2) Em Lancamentos, preencha processo, CPF, CNPJ, referencia,
      vencimento e valor e clique em "Adicionar a lista" (ou
