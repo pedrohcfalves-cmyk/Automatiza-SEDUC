@@ -45,6 +45,7 @@
     exibirTela(tela);
   }
 
+  let telaExibida = null;
   function exibirTela(tela) {
     document.querySelectorAll(".tela").forEach((s) => (s.hidden = s.id !== `tela-${tela}`));
     const passo = tela === "concluido" ? "fim" : tela === "lote-fim" ? "conferencia" : tela;
@@ -54,6 +55,14 @@
       li.classList.toggle("atual", i === indice);
     });
     document.querySelector(".conteudo").scrollTop = 0;
+    // Leitor de tela e teclado: o foco acompanha a TROCA de tela (vai para o título dela).
+    // Na primeira exibição não: o primeiro Tab tem que cair no "Pular para o conteúdo".
+    const titulo = document.querySelector(`#tela-${tela} h1, #tela-${tela} h2`);
+    if (titulo && telaExibida && telaExibida !== tela) {
+      titulo.tabIndex = -1;
+      titulo.focus({ preventScroll: true });
+    }
+    telaExibida = tela;
   }
 
   // ---------------------------------------------------------- Registro
@@ -412,7 +421,14 @@
 
   window.lba = {
     receber(eventos) {
-      for (const e of eventos) (tratar[e.tipo] || (() => {}))(e);
+      // Um evento ruim não derruba os seguintes (senão a tela congela no meio da automação).
+      for (const e of eventos) {
+        try {
+          (tratar[e.tipo] || (() => {}))(e);
+        } catch (erro) {
+          console.error("evento", e && e.tipo, erro);
+        }
+      }
     },
   };
 
@@ -431,7 +447,12 @@
   async function conferirProcesso(final) {
     const texto = $("in-processo").value.trim();
     if (!texto) return marcarCampo("processo", final ? "invalido" : "", final ? "Informe o número do processo." : DICA_PROCESSO), null;
-    const ok = api ? await api.validar_processo(texto) : formatarProcessoLocal(texto);
+    let ok;
+    try {
+      ok = api ? await api.validar_processo(texto) : formatarProcessoLocal(texto);
+    } catch (erro) {
+      return marcarCampo("processo", "invalido", "Não consegui conferir o processo agora. Tente de novo."), null;
+    }
     if (ok) marcarCampo("processo", "valido", `✓ Entendi como <b class="mono">${esc(ok)}</b>`);
     else if (final || texto.replace(/\D/g, "").length >= 16)
       marcarCampo("processo", "invalido", "Não parece um processo do SEI. O formato é <code>0000.000000/0000-00</code> — ou os 16 números seguidos.");
@@ -523,9 +544,14 @@
     if (!tipo) return document.querySelector('input[name="tipo-ob"]').focus();
     if (!docs) return document.querySelector(".chk-doc").focus();
 
-    const r = api
-      ? await api.processar($("in-processo").value, $("in-ob").value, tipo, docs, modoCeEscolhido())
-      : { ok: true, processo, ob: $("in-ob").value.trim().toUpperCase(), tipo_ob: tipo, documentos: docs, modo_ce: modoCeEscolhido() };
+    let r;
+    try {
+      r = api
+        ? await api.processar($("in-processo").value, $("in-ob").value, tipo, docs, modoCeEscolhido())
+        : { ok: true, processo, ob: $("in-ob").value.trim().toUpperCase(), tipo_ob: tipo, documentos: docs, modo_ce: modoCeEscolhido() };
+    } catch (erro) {
+      r = { ok: false, erro: `Não consegui começar: ${erro && erro.message ? erro.message : erro}` };
+    }
     if (!r.ok) {
       if (!r.campo) return avisoDeEnvio("dados-erro", r.erro || "Não consegui começar. Tente de novo.");
       if (r.campo === "documentos") return conferirDocumentos(), document.querySelector(".chk-doc").focus();
@@ -619,7 +645,12 @@
     if (!docs) return document.querySelector(".chk-doc").focus();
     const modo = modoCe || modoCeEscolhido();
     avisoDeEnvio("lote-erro-leitura", "");
-    const r = api ? await api.processar_lote(somenteLinhas || null, docs, modo) : { ok: true };
+    let r;
+    try {
+      r = api ? await api.processar_lote(somenteLinhas || null, docs, modo) : { ok: true };
+    } catch (erro) {
+      r = { ok: false, erro: `Não consegui começar: ${erro && erro.message ? erro.message : erro}` };
+    }
     if (!r.ok) return avisoDeEnvio("lote-erro-leitura", r.erro || "");
     estado.documentos = docs;
     estado.modoCe = modo;

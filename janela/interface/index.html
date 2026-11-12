@@ -440,11 +440,11 @@
 
       <div class="barra" aria-hidden="true"><div class="barra-cheia" id="barra"></div></div>
       <div class="agora-linha">
-        <p class="agora" id="agora">Preparando…</p>
+        <p class="agora" id="agora" role="status" aria-live="polite">Preparando…</p>
         <span class="relogio" id="relogio" title="Tempo da automação nesta OB (a conferência não conta)">⏱ <b id="relogio-txt">0:00</b></span>
       </div>
 
-      <div class="erro" id="erro" hidden>
+      <div class="erro" id="erro" role="alert" hidden>
         <div class="erro-cab"><svg class="ic"><use href="#i-alerta"/></svg><strong>A automação parou</strong></div>
         <pre id="erro-msg"></pre>
         <p class="retomar-nota" id="erro-retomar"></p>
@@ -693,10 +693,10 @@
         </div>
         <div class="barra" aria-hidden="true"><div class="barra-cheia" id="ne-barra"></div></div>
         <div class="agora-linha">
-          <p class="agora" id="ne-agora">Preparando…</p>
+          <p class="agora" id="ne-agora" role="status" aria-live="polite">Preparando…</p>
           <span class="relogio" id="ne-relogio" title="Tempo da automação nesta NE (a conferência não conta)">⏱ <b id="ne-relogio-txt">0:00</b></span>
         </div>
-        <div class="erro" id="ne-erro" hidden>
+        <div class="erro" id="ne-erro" role="alert" hidden>
           <div class="erro-cab"><svg class="ic"><use href="#i-alerta"/></svg><strong>A automação parou</strong></div>
           <pre id="ne-erro-msg"></pre>
           <p class="retomar-nota" id="ne-erro-retomar"></p>

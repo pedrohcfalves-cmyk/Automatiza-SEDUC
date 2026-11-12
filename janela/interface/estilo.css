@@ -700,3 +700,6 @@ kbd { font: 600 12px var(--mono); background: var(--superficie-2); border: 1px s
 :root[data-acess-contraste] .lateral small, :root[data-acess-contraste] .marca-sub, :root[data-acess-contraste] .lateral .versao { opacity: 1; color: #FFFFFF; }
 :root[data-acess-contraste] .modal { background: rgba(0, 0, 0, .75); }
 :root[data-acess-contraste] .modal-caixa { border: 3px solid var(--borda-forte); }
+
+/* Título que recebe o foco ao trocar de tela (app.js, exibirTela): sem o contorno de foco. */
+.tela :is(h1, h2)[tabindex="-1"]:focus { outline: none; }

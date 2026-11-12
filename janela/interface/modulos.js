@@ -214,7 +214,12 @@
     // Antes de começar: o Chrome só com as abas do BB e do SEI, e o login confirmado (central.js).
     if (window.lbaLogin && !(await window.lbaLogin.exigir("bb"))) return status("bb", "Entre no Banco do Brasil e no SEI para começar.", "erro");
     if (!g.api()) return demoRodar("bb", "BB · demonstração");
-    const r = await g.api().bb_executar(valoresBb(), Number(indice), respostas);
+    let r;
+    try {
+      r = await g.api().bb_executar(valoresBb(), Number(indice), respostas);
+    } catch (erro) {
+      r = { ok: false, erro: String(erro && erro.message ? erro.message : erro) };
+    }
     if (!r.ok) status("bb", r.erro || "Não consegui começar.", "erro");
     else $("bb-confirmacao").value = "";   // a confirmação vale para uma rodada só
   }

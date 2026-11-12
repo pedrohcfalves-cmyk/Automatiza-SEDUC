@@ -65,6 +65,26 @@ class TesteOrdemBancaria(Base):
         self.p.click("#btn-login-ok")
         self.p.wait_for_selector("#tela-dados:not([hidden])")
 
+    def test_evento_ruim_nao_derruba_os_seguintes(self):
+        # "lote_inicio" sem itens faz o tratador lançar; o "erro" que vem depois tem que aparecer
+        self.p.evaluate("""lba.receber([{tipo: "lote_inicio"}, {tipo: "erro", fase: "processar", mensagem: "falha de teste"}])""")
+        self.p.wait_for_selector("#erro:not([hidden])", timeout=3000)
+        self.assertIn("falha de teste", self.p.inner_text("#erro"))
+
+    def test_regioes_vivas_para_leitor_de_tela(self):
+        for seletor in ("#erro", "#ne-erro"):
+            self.assertEqual(self.p.get_attribute(seletor, "role"), "alert", seletor)
+        for seletor in ("#agora", "#ne-agora"):
+            self.assertEqual(self.p.get_attribute(seletor, "aria-live"), "polite", seletor)
+        self.assertEqual(self.p.locator("#registro[aria-live], #registro [aria-live]").count(), 0,
+                         "o registro recebe linhas demais para ser lido em voz alta")
+
+    def test_foco_vai_para_o_titulo_ao_trocar_de_tela(self):
+        self.p.evaluate("""lba.receber([{tipo: "erro", fase: "processar", mensagem: "x"}])""")
+        self.p.wait_for_selector("#tela-execucao:not([hidden])")
+        self.assertEqual(self.p.evaluate("document.activeElement.tagName"), "H1")
+        self.assertTrue(self.p.evaluate("document.activeElement.closest('#tela-execucao') !== null"))
+
     def test_nada_da_ne_na_tela_da_ob(self):
         self.assertNotIn("Nota de Empenho", self.p.inner_html("#tela-dados"))
         self.assertEqual(self.p.locator("#tela-dados [id^='ne-'], #tela-dados [name='assunto']").count(), 0)

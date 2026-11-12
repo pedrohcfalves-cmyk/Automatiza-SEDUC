@@ -135,6 +135,22 @@ class TestaEscolhaDaCe(unittest.TestCase):
         self.assertTrue(A.trabalhador.comandos.empty())
         self.assertTrue(self.p.page.is_visible("#tela-dados"))
 
+    def test_falha_do_python_ao_processar_aparece_na_tela_e_solta_o_botao(self):
+        self._passo3()
+        self.p.page.fill("#in-processo", "0029001947202667")
+        self.p.page.fill("#in-ob", "2026OB136475")
+        self._escolher("tipo-ob", "regularizacao")
+        original = A.Api.processar
+        A.Api.processar = lambda *a, **k: 1 / 0
+        try:
+            self.p.page.click("#btn-processar")
+            self.p.esperar("!document.getElementById('dados-erro').hidden", segundos=5, mensagem="aviso na tela")
+        finally:
+            A.Api.processar = original
+        self.assertTrue(self.p.page.is_enabled("#btn-processar"))
+        self.assertTrue(self.p.page.is_visible("#tela-dados"))
+        self.p.erros_js.clear()  # a falha foi mostrada na tela; não é erro de JavaScript solto
+
     def test_lote_com_automacao_em_andamento_avisa(self):
         self._passo3()
         self.p.page.click("#aba-lote")
