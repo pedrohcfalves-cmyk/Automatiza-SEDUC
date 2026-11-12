@@ -36,13 +36,17 @@ def _bb():
 # ------------------------------------------------------------- execução
 
 
-def rodar(modulo: str, rotulo: str, funcao, emitir) -> dict:
+_OCUPADO = {"ok": False, "erro": "Já tem uma automação rodando. Espere ela terminar (ou peça para parar)."}
+
+
+def rodar(modulo: str, rotulo: str, funcao, emitir, ja_reservado: bool = False) -> dict:
     """
     Roda `funcao()` numa thread nova, com o COM (Excel) iniciado nela.
     Avisa a janela com os eventos "modulo_inicio" e "modulo_fim".
+    `ja_reservado`: quem chamou já pegou USO_DO_CHROME (a thread solta no fim do mesmo jeito).
     """
-    if not USO_DO_CHROME.acquire(blocking=False):
-        return {"ok": False, "erro": "Já tem uma automação rodando. Espere ela terminar (ou peça para parar)."}
+    if not ja_reservado and not USO_DO_CHROME.acquire(blocking=False):
+        return dict(_OCUPADO)
 
     def corpo():
         erro = None
@@ -349,13 +353,21 @@ def bb_executar(valores: dict, indice: int, emitir, respostas: dict | None = Non
             return {"ok": False, "erro": motivo.replace(" (opção 1)", "").replace("(opção 1)", "")}
         if not cfg.aba_planilha:
             return {"ok": False, "erro": "Escolha a aba da planilha."}
-    bb.PEDIDO_PARADA.clear()
-    _instalar_respostas_bb(bb)
-    _respostas_bb.clear()
-    _respostas_bb.update(respostas)
-    _emitir_bb = emitir
-    while not _fila_bb.empty():
-        _fila_bb.get_nowait()
+    # A trava vem ANTES de mexer no estado: um segundo clique não pode apagar o "Parar"
+    # nem as respostas da execução que já está rodando.
+    if not USO_DO_CHROME.acquire(blocking=False):
+        return dict(_OCUPADO)
+    try:
+        bb.PEDIDO_PARADA.clear()
+        _instalar_respostas_bb(bb)
+        _respostas_bb.clear()
+        _respostas_bb.update(respostas)
+        _emitir_bb = emitir
+        while not _fila_bb.empty():
+            _fila_bb.get_nowait()
+    except BaseException:
+        USO_DO_CHROME.release()
+        raise
 
     def tarefa():
         try:
@@ -372,4 +384,8 @@ def bb_executar(valores: dict, indice: int, emitir, respostas: dict | None = Non
             except Exception:
                 pass
 
-    return rodar("bb", f"BB · {nome}", tarefa, emitir)
+    try:
+        return rodar("bb", f"BB · {nome}", tarefa, emitir, ja_reservado=True)
+    except BaseException:  # falhou antes da thread nascer (ela é quem solta)
+        USO_DO_CHROME.release()
+        raise
