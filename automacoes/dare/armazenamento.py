@@ -47,10 +47,14 @@ def registrar_historico(
     servidor: str = "",
     pdf: Path | str = "",
     observacao: str = "",
-) -> None:
-    """Acrescenta uma linha ao historico.csv (separador ';', abre direto no Excel)."""
-    config.PASTA_DADOS.mkdir(parents=True, exist_ok=True)
-    novo = not config.ARQ_HISTORICO.exists()
+) -> bool:
+    """
+    Acrescenta uma linha ao historico.csv (separador ';', abre direto no Excel).
+
+    Nunca lança por falha de arquivo (CSV aberto no Excel, disco cheio): o DARE já
+    foi gerado e o lote tem que seguir. Nesse caso a linha vai para
+    historico_reserva.csv e a função devolve False.
+    """
     linha = {
         "data_hora": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
         "status": status,
@@ -65,11 +69,21 @@ def registrar_historico(
         "pdf": str(pdf),
         "observacao": observacao,
     }
-    with open(config.ARQ_HISTORICO, "a", newline="", encoding="utf-8-sig") as f:
-        escritor = csv.DictWriter(f, COLUNAS_HISTORICO, delimiter=";")
-        if novo:
-            escritor.writeheader()
-        escritor.writerow(linha)
+    reserva = config.ARQ_HISTORICO.with_name("historico_reserva.csv")
+    for destino in (config.ARQ_HISTORICO, reserva):
+        try:
+            config.PASTA_DADOS.mkdir(parents=True, exist_ok=True)
+            novo = not destino.exists()
+            with open(destino, "a", newline="", encoding="utf-8-sig") as f:
+                escritor = csv.DictWriter(f, COLUNAS_HISTORICO, delimiter=";")
+                if novo:
+                    escritor.writeheader()
+                escritor.writerow(linha)
+            return destino is config.ARQ_HISTORICO
+        except OSError as erro:
+            log.warning("Não consegui gravar o histórico em %s: %s", destino, erro)
+            print(f"⚠️ Não consegui gravar o histórico em {destino.name}: {erro}")
+    return False
 
 
 def ler_historico(limite: int = 10) -> list[dict]:
