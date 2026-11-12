@@ -14,6 +14,20 @@ def so_digitos(texto) -> str:
     return re.sub(r"\D", "", str(texto or ""))
 
 
+_MILHAR = re.compile(r"[1-9]\d{0,2}(\.\d{3})+")
+
+
+def _decimal_em_texto(texto: str) -> str:
+    """'1.105,50'->'1105.50'; '7.243'->'7243'; ambíguo ('1105.50') -> ValueError."""
+    if "," in texto:
+        return texto.replace(".", "").replace(",", ".")
+    if "." in texto:
+        if _MILHAR.fullmatch(texto):
+            return texto.replace(".", "")
+        raise ValueError(f"Valor ambíguo: '{texto}'. Use vírgula nos centavos (exemplo: 1.105,50).")
+    return texto
+
+
 def normalizar(valor) -> float:
     """
     Converte qualquer um dos formatos de valor do projeto para float em reais:
@@ -25,7 +39,7 @@ def normalizar(valor) -> float:
     valor = str(valor).replace("R$", "").strip()
     if valor.isdigit():
         return float(valor) / 100
-    return float(valor.replace(".", "").replace(",", "."))
+    return float(_decimal_em_texto(valor))
 
 
 def reais(valor: float) -> str:
@@ -69,8 +83,9 @@ def padronizar_valor(valor) -> tuple[str, str]:
     if texto.isdigit():
         centavos = int(texto)
     else:
+        decimal = _decimal_em_texto(texto)  # fora do try: a mensagem de "ambíguo" chega a quem digitou
         try:
-            centavos = round(float(texto.replace(".", "").replace(",", ".")) * 100)
+            centavos = round(float(decimal) * 100)
         except ValueError:
             raise ValueError(f"Valor inválido: '{valor}' (exemplo: 1.105,50).")
     if centavos < 0:
