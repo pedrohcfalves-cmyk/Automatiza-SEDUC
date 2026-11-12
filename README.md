@@ -497,6 +497,17 @@ uma licença vencida.
 ### Testes
 
 ```bash
+python -m pip install -r requirements-dev.txt   # uma vez: as dependências + pytest
+python testes/rodar_tudo.py                     # todos os grupos; termina com erro se algum falhar
+python testes/rodar_tudo.py dare geral          # só alguns grupos
+```
+
+O `rodar_tudo.py` usa uma pasta de dados temporária (nada toca os dados reais)
+e se recusa a rodar com o Chrome da automação aberto (porta 9222). O mesmo
+comando roda no GitHub a cada push (`.github/workflows/testes.yml`, com Python 3.13).
+Para rodar só um grupo à mão:
+
+```bash
 python testes/testes_divisao.py
 python testes/teste_escolha_documentos.py
 python -m unittest discover -s testes/dare -t .
