@@ -117,6 +117,19 @@
     fundo.className = "modal dare-modal cad-modal";
     fundo.innerHTML = `<div class="modal-caixa" role="dialog" aria-modal="true">${html}</div>`;
     document.body.appendChild(fundo);
+    // Nome do diálogo para o leitor de tela (o título dele) e o foco de volta a quem abriu, ao fechar.
+    const caixa = fundo.querySelector(".modal-caixa");
+    const titulo = caixa.querySelector("h1, h2, h3, .modal-titulo");
+    if (titulo) {
+      titulo.id = titulo.id || "dlg-" + Math.random().toString(36).slice(2, 8);
+      caixa.setAttribute("aria-labelledby", titulo.id);
+    } else caixa.setAttribute("aria-label", "Janela");
+    const quemAbriu = document.activeElement;
+    const remover = fundo.remove.bind(fundo);
+    fundo.remove = () => {
+      remover();
+      if (quemAbriu && quemAbriu.isConnected) quemAbriu.focus();
+    };
     fundo.addEventListener("keydown", (e) => {
       if (e.key === "Escape" && aoFechar) {
         e.preventDefault();
@@ -277,7 +290,7 @@
 
   // O Voltar sempre à esquerda e o botão principal (verde/azul) sempre à direita, como na janela original.
   const barraDeBotoes = (esquerda, direita) => `<div class="cad-barra"><div>${esquerda || ""}</div><div class="cad-barra-dir">${direita || ""}</div></div>`;
-  const voltar = (destino) => botao("cad-voltar", '<svg class="ic"><use href="#i-voltar"/></svg>Voltar', "fantasma", ` data-destino="${destino}"`);
+  const voltar = (destino) => botao("cad-voltar", '<svg class="ic" aria-hidden="true"><use href="#i-voltar"/></svg>Voltar', "fantasma", ` data-destino="${destino}"`);
 
   function ir(tela, dados) {
     if (tela !== "estatisticas") s.retorno = tela;
@@ -302,13 +315,13 @@
   const TELAS = {
     inicio: () => `${cabecalho(0, "Cadastrar credores no SIGEF", "Este programa cadastra pessoas como credores no SIGEF e grava a conta bancária de cada uma, uma pessoa de cada vez, sem você precisar digitar nada no SIGEF.")}
       <div class="grade2">
-        <div class="cartao"><h3><svg class="ic ok"><use href="#i-check"/></svg>Antes de começar, tenha em mãos:</h3>
+        <div class="cartao"><h3><svg class="ic ok" aria-hidden="true"><use href="#i-check"/></svg>Antes de começar, tenha em mãos:</h3>
           <ul class="lista"><li>Seu usuário e sua senha do SIGEF.</li><li>A planilha do Excel com os dados das pessoas, ou os dados para digitar.</li></ul></div>
-        <div class="cartao"><h3><svg class="ic"><use href="#i-seta"/></svg>Como funciona:</h3>
+        <div class="cartao"><h3><svg class="ic" aria-hidden="true"><use href="#i-seta"/></svg>Como funciona:</h3>
           <ol class="lista">${PASSOS.map((p) => `<li>${esc(p)}</li>`).join("")}</ol></div>
       </div>
       ${banner("aviso", "O programa abre o Google Chrome sozinho (o mesmo Chrome das outras automações da Central). Enquanto o cadastro estiver acontecendo, não feche o Chrome. Você pode acompanhar tudo por ele.")}
-      ${barraDeBotoes("", botao("cad-comecar", 'Começar <svg class="ic"><use href="#i-seta"/></svg>', "primario grande"))}`,
+      ${barraDeBotoes("", botao("cad-comecar", 'Começar <svg class="ic" aria-hidden="true"><use href="#i-seta"/></svg>', "primario grande"))}`,
 
     login: () => `${cabecalho(1, "Entre no SIGEF")}
       <div id="cad-situacao">${banner("info", "Abrindo o Google Chrome… aguarde.")}</div>
@@ -316,7 +329,7 @@
         <li>Clique na janela do Google Chrome que acabou de abrir.</li>
         <li>Digite seu usuário e sua senha e entre no SIGEF, como você faz todos os dias.</li>
         <li>Volte para esta janela e clique no botão verde Já entrei no SIGEF.</li></ol></div>
-      ${barraDeBotoes(voltar("inicio"), botao("cad-abrir", '<svg class="ic"><use href="#i-chrome"/></svg>Abrir o Chrome de novo') + botao("cad-entrei", 'Já entrei no SIGEF <svg class="ic"><use href="#i-seta"/></svg>', "primario grande"))}`,
+      ${barraDeBotoes(voltar("inicio"), botao("cad-abrir", '<svg class="ic" aria-hidden="true"><use href="#i-chrome"/></svg>Abrir o Chrome de novo') + botao("cad-entrei", 'Já entrei no SIGEF <svg class="ic" aria-hidden="true"><use href="#i-seta"/></svg>', "primario grande"))}`,
 
     origem: () => `${cabecalho(2, "De onde vêm os dados?", "Escolha uma das duas opções.")}
       ${s.refazer ? `${banner("aviso", `Pessoas com erro no último cadastro: ${s.refazer}. Se já corrigiu o problema, você pode refazer só essas pessoas.`)}
@@ -336,7 +349,7 @@
           <div class="acao linha" style="margin-top:10px">${botao("cad-procurar", "Procurar arquivo…")}${botao("cad-atualizar", "Atualizar a lista", "fantasma pequeno")}</div></div>
         <div><h3>Aba (folha) da planilha</h3><select class="cad-lista" id="cad-abas" size="7"></select></div>
       </div>
-      ${barraDeBotoes(voltar("origem"), botao("cad-continuar", 'Continuar <svg class="ic"><use href="#i-seta"/></svg>', "primario grande", " disabled"))}`,
+      ${barraDeBotoes(voltar("origem"), botao("cad-continuar", 'Continuar <svg class="ic" aria-hidden="true"><use href="#i-seta"/></svg>', "primario grande", " disabled"))}`,
 
     colunas: () => {
       const i = s.info;
@@ -357,7 +370,7 @@
         <div id="cad-problema"></div>
         <h3 style="margin-top:22px">Quer conferir cada pessoa antes de gravar?</h3>
         ${escolha("cad-conf", CONFERENCIA, s.conferencia)}
-        ${barraDeBotoes(voltar("planilha"), botao("cad-comecar-cad", 'Começar o cadastro <svg class="ic"><use href="#i-seta"/></svg>', "primario grande"))}`;
+        ${barraDeBotoes(voltar("planilha"), botao("cad-comecar-cad", 'Começar o cadastro <svg class="ic" aria-hidden="true"><use href="#i-seta"/></svg>', "primario grande"))}`;
     },
 
     digitar: () => `${cabecalho(2, "Digite os dados das pessoas", "Preencha os dados de uma pessoa e clique em Adicionar à lista. Repita para cada pessoa. Quando terminar, clique em Começar o cadastro.")}
@@ -370,7 +383,7 @@
       </div>
       <h3 style="margin-top:22px">Quer conferir cada pessoa antes de gravar?</h3>
       ${escolha("cad-conf", CONFERENCIA, s.conferencia)}
-      ${barraDeBotoes(voltar("origem"), botao("cad-comecar-cad", 'Começar o cadastro <svg class="ic"><use href="#i-seta"/></svg>', "primario grande", " disabled"))}`,
+      ${barraDeBotoes(voltar("origem"), botao("cad-comecar-cad", 'Começar o cadastro <svg class="ic" aria-hidden="true"><use href="#i-seta"/></svg>', "primario grande", " disabled"))}`,
 
     cadastro: () => {
       const c = s.cad;
@@ -380,7 +393,7 @@
         <div id="cad-agora">${banner("info", "Abrindo a tela de credores do SIGEF…")}</div>
         <div id="cad-avisos"></div>
         ${tabela([c.chave, "Nome", "CPF", "Resultado"], "", "cad-resultados")}
-        ${barraDeBotoes("", botao("cad-parar", '<svg class="ic"><use href="#i-parar"/></svg>Parar o cadastro', "perigo"))}`;
+        ${barraDeBotoes("", botao("cad-parar", '<svg class="ic" aria-hidden="true"><use href="#i-parar"/></svg>Parar o cadastro', "perigo"))}`;
     },
 
     resultado: () => {
@@ -396,9 +409,9 @@
         ${n.ERRO ? banner("erro", `Algumas pessoas tiveram problema. Elas estão marcadas com ✖ na lista abaixo${f.modo === "planilha" ? " e na coluna do resultado da planilha, começando com ERRO" : ""}.${podeRefazer ? " Corrija os dados se precisar e clique em Refazer as que deram erro." : " Corrija os dados e cadastre de novo só essas pessoas."}`)
           : !f.interrompido ? banner("sucesso", "Todas as pessoas foram feitas sem problema.") : ""}
         ${tabela([f.modo === "planilha" ? "Linha" : "Nº", "Nome", "CPF", "Resultado"], f.resultados.map((r) => linhaResultado(r.linha, r.status)).join(""))}
-        ${barraDeBotoes(botao("cad-registros", '<svg class="ic"><use href="#i-pasta"/></svg>Abrir a pasta de registros', "fantasma pequeno"),
+        ${barraDeBotoes(botao("cad-registros", '<svg class="ic" aria-hidden="true"><use href="#i-pasta"/></svg>Abrir a pasta de registros', "fantasma pequeno"),
           podeRefazer ? botao("cad-outro", "Fazer outro cadastro") + botao("cad-refazer", `Refazer as que deram erro (${f.refazer})`, "primario grande")
-            : botao("cad-outro", 'Fazer outro cadastro <svg class="ic"><use href="#i-seta"/></svg>', "primario grande"))}`;
+            : botao("cad-outro", 'Fazer outro cadastro <svg class="ic" aria-hidden="true"><use href="#i-seta"/></svg>', "primario grande"))}`;
     },
 
     estatisticas: () => `${cabecalho(0, "Estatísticas", "Quanto tempo a automação economizou, somando todas as sessões. Esses dados servem para a pesquisa de implantação.")}
@@ -416,8 +429,8 @@
       <div id="cad-est-sessoes"></div>
       <h3 style="margin-top:22px">Juntar dados de vários computadores</h3>
       <p class="nota" id="cad-est-pasta" style="white-space:pre-line"></p>
-      <div class="acao linha">${botao("cad-pasta-pesquisa", "Pasta da pesquisa…")}${botao("cad-importar", "Trazer arquivos de outro computador…")}${botao("cad-abrir-dados", '<svg class="ic"><use href="#i-pasta"/></svg>Abrir a pasta dos dados', "fantasma pequeno")}</div>
-      ${barraDeBotoes(botao("cad-est-voltar", '<svg class="ic"><use href="#i-voltar"/></svg>Voltar'), botao("cad-gerar", "Pacote da pesquisa (Excel)") + '<button class="btn primario grande" type="button" data-relatorio-geral><svg class="ic" aria-hidden="true"><use href="#i-grafico"/></svg>Abrir o Relatório geral</button>')}`,
+      <div class="acao linha">${botao("cad-pasta-pesquisa", "Pasta da pesquisa…")}${botao("cad-importar", "Trazer arquivos de outro computador…")}${botao("cad-abrir-dados", '<svg class="ic" aria-hidden="true"><use href="#i-pasta"/></svg>Abrir a pasta dos dados', "fantasma pequeno")}</div>
+      ${barraDeBotoes(botao("cad-est-voltar", '<svg class="ic" aria-hidden="true"><use href="#i-voltar"/></svg>Voltar'), botao("cad-gerar", "Pacote da pesquisa (Excel)") + '<button class="btn primario grande" type="button" data-relatorio-geral><svg class="ic" aria-hidden="true"><use href="#i-grafico"/></svg>Abrir o Relatório geral</button>')}`,
   };
 
   // ----------------------------------------------------------- o que cada tela faz

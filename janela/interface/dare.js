@@ -154,7 +154,10 @@
         const tr = e.target.closest("tbody tr[data-id]");
         if (tr && this.op.aoDuplo) this.op.aoDuplo(tr.dataset.id);
       });
-      el.addEventListener("keydown", (e) => this.op.aoTecla && this.op.aoTecla(e));
+      el.addEventListener("keydown", (e) => this._tecla(e) || (this.op.aoTecla && this.op.aoTecla(e)));
+      el.tabIndex = 0; // dá para chegar na tabela com Tab; setas, Espaço e Enter fazem o que o mouse faz
+      el.setAttribute("role", "grid");
+      this.cursor = null; // a linha "da vez" no teclado
     }
 
     definir(linhas) {
@@ -180,11 +183,13 @@
       const cab = this.colunas.map((c) => {
         const seta = this.ordem && this.ordem.chave === c.chave ? (this.ordem.desc ? " ▼" : " ▲") : "";
         const ord = this.op.ordenavel ? " ordenavel" : "";
-        return `<th class="${c.classe || ""}${ord}" data-chave="${c.chave}">${esc(c.titulo)}${seta}</th>`;
+        const sort = this.ordem && this.ordem.chave === c.chave ? (this.ordem.desc ? "descending" : "ascending") : "none";
+        const teclado = this.op.ordenavel ? ` tabindex="0" aria-sort="${sort}"` : "";
+        return `<th class="${c.classe || ""}${ord}" data-chave="${c.chave}" role="columnheader"${teclado}>${esc(c.titulo)}${seta}</th>`;
       }).join("");
       const linhas = this._ordenadas();
       const corpo = linhas.length
-        ? linhas.map((l) => `<tr data-id="${esc(l.id)}" class="${l.classe || ""}${this.sel.has(l.id) ? " sel" : ""}">${
+        ? linhas.map((l) => `<tr data-id="${esc(l.id)}" role="row" aria-selected="${this.sel.has(l.id)}" class="${l.classe || ""}${this.sel.has(l.id) ? " sel" : ""}${this.cursor === l.id ? " cursor" : ""}">${
             l.cels.map((v, i) => `<td class="${this.colunas[i].classe || ""}">${l.html && l.html[i] ? v : esc(v)}</td>`).join("")}</tr>`).join("")
         : `<tr><td class="vazio" colspan="${this.colunas.length}">${esc(this.op.vazio)}</td></tr>`;
       this.el.innerHTML = `<table><thead><tr>${cab}</tr></thead><tbody>${corpo}</tbody></table>`;
@@ -192,18 +197,24 @@
 
     _clique(e) {
       const th = e.target.closest("th[data-chave]");
-      if (th && this.op.ordenavel) {
-        const chave = th.dataset.chave;
-        this.ordem = this.ordem && this.ordem.chave === chave ? { chave, desc: !this.ordem.desc } : { chave, desc: false };
-        return this.render();
-      }
+      if (th && this.op.ordenavel) return this._ordenar(th.dataset.chave);
       const tr = e.target.closest("tbody tr[data-id]");
       if (!tr || this.op.selecao === "none") return;
-      const id = tr.dataset.id;
-      if (this.op.selecao === "multi" && (e.ctrlKey || e.metaKey)) {
+      this._selecionar(tr.dataset.id, e.ctrlKey || e.metaKey, e.shiftKey);
+    }
+
+    _ordenar(chave) {
+      this.ordem = this.ordem && this.ordem.chave === chave ? { chave, desc: !this.ordem.desc } : { chave, desc: false };
+      this.render();
+    }
+
+    /* A seleção do clique (simples, Ctrl e Shift), usada também pelo teclado. */
+    _selecionar(id, ctrl, shift) {
+      this.cursor = id;
+      if (this.op.selecao === "multi" && ctrl) {
         this.sel.has(id) ? this.sel.delete(id) : this.sel.add(id);
         this.ancora = id;
-      } else if (this.op.selecao === "multi" && e.shiftKey && this.ancora !== null) {
+      } else if (this.op.selecao === "multi" && shift && this.ancora !== null) {
         const ordem = this._ordenadas().map((l) => l.id);
         const [a, b] = [ordem.indexOf(this.ancora), ordem.indexOf(id)].sort((x, y) => x - y);
         this.sel = new Set(ordem.slice(a, b + 1));
@@ -216,7 +227,39 @@
     }
 
     _marcar() {
-      this.el.querySelectorAll("tbody tr[data-id]").forEach((tr) => tr.classList.toggle("sel", this.sel.has(tr.dataset.id)));
+      this.el.querySelectorAll("tbody tr[data-id]").forEach((tr) => {
+        tr.classList.toggle("sel", this.sel.has(tr.dataset.id));
+        tr.classList.toggle("cursor", tr.dataset.id === this.cursor);
+        tr.setAttribute("aria-selected", this.sel.has(tr.dataset.id));
+      });
+    }
+
+    /* Teclado: devolve true se a tecla foi tratada aqui (senão vai para op.aoTecla). */
+    _tecla(e) {
+      const th = e.target.closest("th[data-chave]");
+      if (th) {
+        if (!this.op.ordenavel || (e.key !== "Enter" && e.key !== " ")) return false;
+        e.preventDefault();
+        this._ordenar(th.dataset.chave);
+        const novo = this.el.querySelector(`th[data-chave="${th.dataset.chave}"]`); // o render() trocou o <th>
+        if (novo) novo.focus();
+        return true;
+      }
+      // Botão ou campo dentro de uma célula fica com as teclas dele.
+      if (this.op.selecao === "none" || e.target.closest("button, a, input, select, textarea")) return false;
+      const ordem = this._ordenadas().map((l) => l.id);
+      if (!ordem.length) return false;
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        const atual = ordem.indexOf(this.cursor !== null ? this.cursor : this.ancora);
+        const i = atual < 0 ? 0 : Math.max(0, Math.min(ordem.length - 1, atual + (e.key === "ArrowDown" ? 1 : -1)));
+        this._selecionar(ordem[i], false, e.shiftKey);
+        const tr = this.el.querySelector("tbody tr.cursor");
+        if (tr) tr.scrollIntoView({ block: "nearest" });
+      } else if (e.key === " " && this.cursor !== null) this._selecionar(this.cursor, true, false);
+      else if (e.key === "Enter" && this.cursor !== null && this.op.aoDuplo) this.op.aoDuplo(this.cursor);
+      else return false;
+      e.preventDefault();
+      return true;
     }
 
     selecionados() {

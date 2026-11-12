@@ -197,6 +197,19 @@
     fundo.className = `modal dare-modal anx-modal ${classe}`;
     fundo.innerHTML = `<div class="modal-caixa" role="dialog" aria-modal="true">${html}</div>`;
     document.body.appendChild(fundo);
+    // Nome do diálogo para o leitor de tela (o título dele) e o foco de volta a quem abriu, ao fechar.
+    const caixa = fundo.querySelector(".modal-caixa");
+    const titulo = caixa.querySelector("h1, h2, h3, .modal-titulo");
+    if (titulo) {
+      titulo.id = titulo.id || "dlg-" + Math.random().toString(36).slice(2, 8);
+      caixa.setAttribute("aria-labelledby", titulo.id);
+    } else caixa.setAttribute("aria-label", "Janela");
+    const quemAbriu = document.activeElement;
+    const remover = fundo.remove.bind(fundo);
+    fundo.remove = () => {
+      remover();
+      if (quemAbriu && quemAbriu.isConnected) quemAbriu.focus();
+    };
     fundo.addEventListener("keydown", (e) => {
       if (e.key === "Escape" && aoFechar) {
         e.preventDefault();
@@ -302,10 +315,10 @@
         <div class="cartao anx-painel" id="anx-painel" hidden></div>
       </div>
       <div class="anx-rodape">
-        <button class="btn perigo" type="button" id="anx-parar" hidden><svg class="ic"><use href="#i-parar"/></svg>Parar o programa</button>
+        <button class="btn perigo" type="button" id="anx-parar" hidden><svg class="ic" aria-hidden="true"><use href="#i-parar"/></svg>Parar o programa</button>
         <label class="check"><input type="checkbox" id="anx-som"${s.som ? " checked" : ""}> Tocar um aviso quando for a minha vez</label>
       </div>
-      <details class="registro" id="anx-registro"><summary><svg class="ic"><use href="#i-registro"/></svg>Registro técnico (para o suporte)</summary><pre id="anx-registro-texto"></pre></details>`;
+      <details class="registro" id="anx-registro"><summary><svg class="ic" aria-hidden="true"><use href="#i-registro"/></svg>Registro técnico (para o suporte)</summary><pre id="anx-registro-texto"></pre></details>`;
     $("anx-parar").onclick = pedirParaParar;
     $("anx-som").onchange = () => {
       s.som = $("anx-som").checked;
@@ -1216,8 +1229,8 @@
       ${cartao("Passo a passo de um processo", `<ol class="lista">${PASSO_A_PASSO.map((p) => `<li>${p}</li>`).join("")}</ol>`)}
       ${cartao("Se algo der errado", `<ul class="lista"><li>O programa explica na própria tela o que aconteceu e o que fazer.</li><li>Rodar de novo com o mesmo processo é seguro: ele não faz nada em dobro.</li>
         <li>Os detalhes técnicos ficam no arquivo registro_de_erros.txt, na pasta dos dados.</li></ul>
-        <div class="acao linha"><button class="btn fantasma" type="button" id="anx-pasta-dados"><svg class="ic"><use href="#i-pasta"/></svg>Abrir a pasta dos dados</button>
-          <button class="btn fantasma pequeno" type="button" id="anx-pasta-processos"><svg class="ic"><use href="#i-pasta"/></svg>Pasta dos processos (JPGs)</button>
+        <div class="acao linha"><button class="btn fantasma" type="button" id="anx-pasta-dados"><svg class="ic" aria-hidden="true"><use href="#i-pasta"/></svg>Abrir a pasta dos dados</button>
+          <button class="btn fantasma pequeno" type="button" id="anx-pasta-processos"><svg class="ic" aria-hidden="true"><use href="#i-pasta"/></svg>Pasta dos processos (JPGs)</button>
           <a class="btn fantasma pequeno" href="mailto:pedrohcfalves@gmail.com">Escrever para pedrohcfalves@gmail.com</a></div>`)}
       ${cartao("Este computador", `<p class="nota">Se o programa não funcionar, mostre esta lista a quem cuida do seu computador.</p>${ambiente}<div class="acao"><button class="btn fantasma pequeno" type="button" id="anx-verificar-ajuda">Verificar de novo</button></div>`)}
       ${cartao("O que há de novo", NOVIDADES.map(([v, t]) => `<p><b>${esc(v)}</b> — ${esc(t)}</p>`).join(""))}

@@ -194,7 +194,7 @@
 
     $("resumo").innerHTML = `
       <div class="resumo-cab">
-        <h3><svg class="ic"><use href="#i-doc"/></svg>Baixado do SIGEF — OB <span class="mono">${esc(r.ob)}</span></h3>
+        <h3><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg>Baixado do SIGEF — OB <span class="mono">${esc(r.ob)}</span></h3>
         <span class="nota">${ces.length} CE(s) distinta(s) · OB: ${r.obs.length} pág. · ${n} PP(s)${docs.length < DOCUMENTOS.length ? ` · anexando só ${esc(descreverDocs(docs))}` : ""}</span>
       </div>
       <table>
@@ -291,7 +291,7 @@
         $("login-pronto").hidden = true;
         box.innerHTML = `
           <div class="erro" style="margin:0;width:100%">
-            <div class="erro-cab"><svg class="ic"><use href="#i-alerta"/></svg><strong>Não consegui abrir o navegador</strong></div>
+            <div class="erro-cab"><svg class="ic" aria-hidden="true"><use href="#i-alerta"/></svg><strong>Não consegui abrir o navegador</strong></div>
             <pre>${esc(e.mensagem)}</pre>
             <button class="btn primario" type="button" id="btn-tentar-conectar">Tentar de novo</button>
           </div>`;

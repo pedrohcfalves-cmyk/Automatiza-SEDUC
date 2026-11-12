@@ -168,7 +168,7 @@
     const avisos = (r.avisos || []).map((a) => `<div class="detalhe" style="color:var(--vermelho);padding:8px 20px">⚠ ${esc(a)}</div>`).join("");
     $("ne-resumo").innerHTML = `
       <div class="resumo-cab">
-        <h3><svg class="ic"><use href="#i-doc"/></svg>Baixado do SIGEF — NE <span class="mono">${esc(s.ne)}</span></h3>
+        <h3><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg>Baixado do SIGEF — NE <span class="mono">${esc(s.ne)}</span></h3>
         <span class="nota">${(r.arquivos || []).length} página(s) em imagem · vira um documento “${esc(s.tipo)}”</span>
       </div>
       ${avisos}

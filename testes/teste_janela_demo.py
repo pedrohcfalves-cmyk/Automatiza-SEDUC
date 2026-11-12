@@ -340,6 +340,44 @@ class TesteAcessibilidade(Base):
 
 
 
+class TesteTecladoEIcones(Base):
+    """Plano 021: ícones decorativos escondidos do leitor de tela e a tabela do DARE pelo teclado."""
+
+    def test_icones_decorativos_escondidos_do_leitor_de_tela(self):
+        self.assertEqual(self.p.locator('svg.ic:not([aria-hidden="true"])').count(), 0)
+        self.assertGreater(self.p.locator("svg.ic").count(), 50)
+
+    def test_dialogo_do_anexar_tem_nome_e_devolve_o_foco(self):
+        self.p.click(".modulo[data-modulo='anexar']")
+        self.p.click("#anx-como-usar")
+        self.p.wait_for_selector(".anx-modal .modal-caixa")
+        nome = self.p.evaluate("""() => { const c = document.querySelector('.anx-modal .modal-caixa');
+            const t = document.getElementById(c.getAttribute('aria-labelledby')); return t && t.textContent; }""")
+        self.assertIn("Como usar", nome or "")
+        self.p.wait_for_function("document.activeElement.closest('.anx-modal')")  # o foco entra no diálogo
+        self.p.keyboard.press("Escape")
+        self.p.wait_for_selector(".anx-modal", state="detached")
+        self.assertEqual(self.p.evaluate("document.activeElement.id"), "anx-como-usar")
+
+    def test_tabela_do_dare_pelo_teclado(self):
+        self.p.click(".modulo[data-modulo='dare']")
+        self.p.wait_for_selector("#dare-recentes tbody tr[data-id]")
+        selecionadas = lambda: self.p.evaluate(  # noqa: E731
+            "[...document.querySelectorAll('#dare-recentes tbody tr[aria-selected=true]')].map(tr => tr.dataset.id)")
+        self.assertEqual(self.p.get_attribute("#dare-recentes", "role"), "grid")
+        self.p.focus("#dare-recentes")  # tabindex=0: dá para chegar com Tab
+        self.assertEqual(selecionadas(), [])
+        self.p.keyboard.press("ArrowDown")
+        self.assertEqual(selecionadas(), ["0"])
+        self.p.keyboard.press("ArrowDown")
+        self.assertEqual(selecionadas(), ["1"])
+        self.p.keyboard.press("ArrowDown")  # já na última: fica
+        self.assertEqual(selecionadas(), ["1"])
+        self.p.keyboard.press("ArrowUp")
+        self.assertEqual(selecionadas(), ["0"])
+        self.assertEqual(self.p.locator("#dare-recentes tbody tr.sel").count(), 1)
+
+
 class TesteLayout(Base):
     """Automações e o resto do menu na lateral; no topo, os passos no meio, o ano e a acessibilidade."""
 
