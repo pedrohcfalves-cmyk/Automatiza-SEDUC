@@ -24,6 +24,7 @@ EXTENSOES = (".xlsx", ".xlsm", ".xlsb", ".xls")
 XL_UP = -4162
 XL_CELULAS_VISIVEIS = 12
 XL_FORMATO_XLSX = 51
+ERRO_CELULA = "#ERRO-NO-EXCEL"
 ERRO_EXCEL_MAX = -2146826000  # #N/A, #REF!, #DIV/0!... chegam como inteiros <= este valor
 
 MODELO_CABECALHOS = [
@@ -77,7 +78,7 @@ def _celula(v: Any) -> Any:
     if isinstance(v, bool):
         return v
     if isinstance(v, int) and v <= ERRO_EXCEL_MAX:
-        return None  # célula com erro (#N/A...) é tratada como vazia
+        return ERRO_CELULA  # texto, não vazio: a linha vira problema em vez de usar o valor padrão
     if isinstance(v, datetime) or (hasattr(v, "year") and hasattr(v, "hour") and hasattr(v, "minute")):
         return datetime(v.year, v.month, v.day, v.hour, v.minute, getattr(v, "second", 0))
     if isinstance(v, date):

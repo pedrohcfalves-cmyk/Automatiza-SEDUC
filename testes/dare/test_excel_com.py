@@ -191,10 +191,10 @@ class TestLeitura(unittest.TestCase):
         self.assertEqual(t.ler(2, 3, 2, 3), [[10.5]])  # uma célula só: o COM devolve valor solto
         self.assertEqual(t.ler(1, 1, 1, 3), [["Processo", "CPF", "Valor"]])
 
-    def test_erro_de_celula_vira_vazio_e_data_vira_datetime(self):
+    def test_erro_de_celula_vira_marcador_e_data_vira_datetime(self):
         pasta = Pasta("p.xlsx", "x", [Aba("A", [[-2146826246, datetime(2026, 1, 2, 3, 4)]])])
         t = excel_com.TabelaExcel(pasta, "A")
-        self.assertEqual(t.ler(1, 1, 1, 2), [[None, datetime(2026, 1, 2, 3, 4)]])
+        self.assertEqual(t.ler(1, 1, 1, 2), [[excel_com.ERRO_CELULA, datetime(2026, 1, 2, 3, 4)]])
 
     def test_ultima_linha(self):
         t = self.tabela()

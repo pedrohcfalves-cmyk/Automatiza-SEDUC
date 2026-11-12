@@ -23,35 +23,36 @@ class TestLimpeza(unittest.TestCase):
         self.addCleanup(p.stop)
         agora = time.time()
         self.arquivos = {}
-        for nome, dias, tam in (("novo.pdf", 1, 100), ("medio.pdf", 20, 200), ("velho.pdf", 90, 300),
-                                ("falhou.pdf", 60, 400)):
+        for nome, dias, tam in (("DARE_novo.pdf", 1, 100), ("DARE_medio.pdf", 20, 200), ("DARE_velho.pdf", 90, 300),
+                                ("DARE_falhou.pdf", 60, 400)):
             caminho = self.pasta / nome
             caminho.write_bytes(b"x" * tam)
             os.utime(caminho, (agora - dias * 86400, agora - dias * 86400))
             self.arquivos[nome] = caminho
         (self.pasta / "nao_e_pdf.txt").write_text("x")
+        (self.pasta / "foto.pdf").write_bytes(b"x" * 999)  # PDF que não é DARE: a limpeza não enxerga
         self.hist.write_text(
             "data_hora;status;pdf\n"
-            f"01/01/2026 10:00:00;ERRO;{self.arquivos['falhou.pdf']}\n"
-            f"01/01/2026 10:00:00;ERRO;{self.arquivos['velho.pdf']}\n"
-            f"02/01/2026 10:00:00;SUCESSO;{self.arquivos['velho.pdf']}\n",
+            f"01/01/2026 10:00:00;ERRO;{self.arquivos['DARE_falhou.pdf']}\n"
+            f"01/01/2026 10:00:00;ERRO;{self.arquivos['DARE_velho.pdf']}\n"
+            f"02/01/2026 10:00:00;SUCESSO;{self.arquivos['DARE_velho.pdf']}\n",
             encoding="utf-8-sig",
         )
 
     def test_lista_so_pdfs_e_marca_nao_anexados(self):
         lista = limpeza.listar_pdfs(self.pasta)
-        self.assertEqual([a.nome for a in lista], ["novo.pdf", "medio.pdf", "falhou.pdf", "velho.pdf"])
+        self.assertEqual([a.nome for a in lista], ["DARE_novo.pdf", "DARE_medio.pdf", "DARE_falhou.pdf", "DARE_velho.pdf"])
         protegidos = {a.nome for a in lista if a.protegido}
-        self.assertEqual(protegidos, {"falhou.pdf"})  # velho.pdf foi anexado numa nova tentativa
+        self.assertEqual(protegidos, {"DARE_falhou.pdf"})  # velho.pdf foi anexado numa nova tentativa
 
     def test_criterios(self):
         lista = limpeza.listar_pdfs(self.pasta)
         nomes = lambda xs: sorted(a.nome for a in xs)
-        self.assertEqual(nomes(limpeza.selecionar(lista, "todos")), ["medio.pdf", "novo.pdf", "velho.pdf"])
+        self.assertEqual(nomes(limpeza.selecionar(lista, "todos")), ["DARE_medio.pdf", "DARE_novo.pdf", "DARE_velho.pdf"])
         self.assertEqual(len(limpeza.selecionar(lista, "todos", proteger=False)), 4)
-        self.assertEqual(nomes(limpeza.selecionar(lista, "mais_antigos", dias=30)), ["velho.pdf"])
+        self.assertEqual(nomes(limpeza.selecionar(lista, "mais_antigos", dias=30)), ["DARE_velho.pdf"])
         ate = (datetime.now() - timedelta(days=10)).date()
-        self.assertEqual(nomes(limpeza.selecionar(lista, "ate_data", ate=ate)), ["medio.pdf", "velho.pdf"])
+        self.assertEqual(nomes(limpeza.selecionar(lista, "ate_data", ate=ate)), ["DARE_medio.pdf", "DARE_velho.pdf"])
         with self.assertRaises(ValueError):
             limpeza.selecionar(lista, "ate_data")
 
@@ -62,9 +63,14 @@ class TestLimpeza(unittest.TestCase):
         self.assertFalse(r.para_lixeira)
         self.assertEqual(r.apagados, 2)
         self.assertEqual(r.bytes_liberados, 500)
-        self.assertTrue(self.arquivos["novo.pdf"].exists())
-        self.assertTrue(self.arquivos["falhou.pdf"].exists())
-        self.assertFalse(self.arquivos["velho.pdf"].exists())
+        self.assertTrue(self.arquivos["DARE_novo.pdf"].exists())
+        self.assertTrue(self.arquivos["DARE_falhou.pdf"].exists())
+        self.assertFalse(self.arquivos["DARE_velho.pdf"].exists())
+
+    def test_pdf_que_nao_e_dare_fica_fora_da_limpeza(self):
+        self.assertNotIn("foto.pdf", [a.nome for a in limpeza.listar_pdfs(self.pasta)])
+        limpeza.apagar(limpeza.selecionar(limpeza.listar_pdfs(self.pasta), "todos"), lixeira=False)
+        self.assertTrue((self.pasta / "foto.pdf").exists())
 
     def test_resumo_e_tamanho(self):
         lista = limpeza.listar_pdfs(self.pasta)

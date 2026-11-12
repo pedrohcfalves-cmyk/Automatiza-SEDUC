@@ -183,6 +183,15 @@ class TestLerLotes(unittest.TestCase):
         self.assertEqual(r.lotes[0].valor, config.VALOR_PADRAO)
         self.assertEqual(r.lotes[0].vencimento, utils.vencimento_padrao())
 
+    def test_celula_com_erro_do_excel_vira_problema_e_nao_valor_padrao(self):
+        from automacoes.dare.excel_com import ERRO_CELULA
+        linha = linha_ok()
+        linha[6] = ERRO_CELULA  # #N/A, #REF!... na coluna do valor
+        r = planilha.ler_lotes(TabelaMemoria([linha]), self.mapeamento(0), 1, 1)
+        self.assertEqual(r.lotes, [])
+        self.assertEqual(len(r.problemas), 1)
+        self.assertIn("alor", r.problemas[0].mensagem)
+
     def test_vencimento_serial_e_valor_fixo(self):
         linha = linha_ok()
         linha[5] = datetime(2026, 11, 10)

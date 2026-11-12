@@ -91,7 +91,9 @@ def listar_pdfs(pasta: Path | None = None, protegidos: set[str] | None = None) -
     try:
         with os.scandir(pasta) as it:
             for entrada in it:
-                if not entrada.is_file() or not entrada.name.lower().endswith(".pdf"):
+                # só os DARE_*.pdf que o programa gera: outro PDF guardado na pasta não é apagado
+                if not entrada.is_file() or not entrada.name.lower().endswith(".pdf") \
+                        or not entrada.name.upper().startswith("DARE_"):
                     continue
                 try:
                     info = entrada.stat()
@@ -124,7 +126,8 @@ def tamanho_pasta(pasta: Path | None = None) -> tuple[int, int]:
     try:
         with os.scandir(Path(pasta or config.PASTA_PDF)) as it:
             for entrada in it:
-                if entrada.is_file() and entrada.name.lower().endswith(".pdf"):
+                if entrada.is_file() and entrada.name.lower().endswith(".pdf") \
+                        and entrada.name.upper().startswith("DARE_"):
                     try:
                         total += entrada.stat().st_size
                         qtd += 1
