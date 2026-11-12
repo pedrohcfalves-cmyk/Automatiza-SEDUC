@@ -6,6 +6,8 @@ from typing import Callable, Optional
 
 from playwright.sync_api import Page, TimeoutError as PlaywrightTimeout
 
+from automacoes.geral import mascarar_cpf
+
 from .bancos import normalizar
 from .config import (
     ANCORA_DOMICILIO,
@@ -191,7 +193,7 @@ def processar_lote(page: Page, lote: Lote, confirmador: Confirmador) -> tuple:
         page.bring_to_front()
 
     resultado = incluir_domicilio(page, lote, confirmador)
-    logger.info("%s -> %s %s", lote.cpf, *resultado)
+    logger.info("%s -> %s %s", mascarar_cpf(lote.cpf), *resultado)
 
     return resultado
 

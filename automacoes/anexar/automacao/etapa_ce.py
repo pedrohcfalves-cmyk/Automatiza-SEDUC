@@ -55,6 +55,7 @@ from automacoes.anexar.automacao.configuracoes import (
     so_digitos,
     tipo_credor,
 )
+from automacoes.geral import mascarar_cpf
 from automacoes.anexar.automacao.utils import URL_SIGEF, obter_ou_criar_aba, salvar_sessao
 
 # Quanto esperar o SIGEF devolver o número da CE depois do "Incluir".
@@ -166,7 +167,7 @@ def _selecionar_credor(context, aba_sigef, dados: dict) -> None:
 
     try:
         if tipo == CREDOR_CPF:
-            print(f"   👤 Credor pessoa física -- pesquisando pelo CPF {cnpj_cpf}")
+            print(f"   👤 Credor pessoa física -- pesquisando pelo CPF {mascarar_cpf(cnpj_cpf)}")
             nova_pagina.locator("#btnCPF").click()
             nova_pagina.wait_for_load_state("networkidle")
             _digitar(nova_pagina.locator("#txtNuCpf"), so_digitos(cnpj_cpf))

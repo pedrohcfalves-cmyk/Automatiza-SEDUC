@@ -55,6 +55,12 @@ def processo_na_arvore(texto_arvore: str, processo: str) -> bool:
     return alvo in "".join(c for c in (texto_arvore or "") if c.isdigit())
 
 
+def mascarar_cpf(texto) -> str:
+    """CPF para registros e logs: ***.456.789-** (o inteiro não vai para arquivo)."""
+    d = "".join(c for c in str(texto or "") if c.isdigit())
+    return f"***.{d[3:6]}.{d[6:9]}-**" if len(d) == 11 else "***"
+
+
 def gravar_json(caminho: str, dados) -> None:
     """Grava de forma atômica (temporário + os.replace): queda no meio não deixa o JSON pela metade."""
     temporario = f"{caminho}.tmp"
