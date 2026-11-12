@@ -489,8 +489,30 @@
     document.querySelectorAll('input[name="tipo-ob"]').forEach((r) => (r.checked = r.value === tipo));
   }
 
-  async function enviarDados(ev) {
-    ev.preventDefault();
+  // Um envio por vez: o segundo clique (ou Enter) enquanto o Python responde não manda de novo.
+  let enviando = false;
+  async function umEnvio(botao, fazer) {
+    if (enviando) return;
+    enviando = true;
+    const antes = botao.disabled;
+    botao.disabled = true;
+    try {
+      return await fazer();
+    } finally {
+      enviando = false;
+      botao.disabled = antes;
+    }
+  }
+
+  function avisoDeEnvio(id, texto) {
+    $(id).textContent = texto || "";
+    $(id).hidden = !texto;
+  }
+
+  const enviarDados = (ev) => (ev.preventDefault(), umEnvio($("btn-processar"), enviarDadosAgora));
+
+  async function enviarDadosAgora() {
+    avisoDeEnvio("dados-erro", "");
     const processo = await conferirProcesso(true);
     const obOk = conferirOb(true);
     const tipo = tipoEscolhido();
@@ -505,6 +527,7 @@
       ? await api.processar($("in-processo").value, $("in-ob").value, tipo, docs, modoCeEscolhido())
       : { ok: true, processo, ob: $("in-ob").value.trim().toUpperCase(), tipo_ob: tipo, documentos: docs, modo_ce: modoCeEscolhido() };
     if (!r.ok) {
+      if (!r.campo) return avisoDeEnvio("dados-erro", r.erro || "Não consegui começar. Tente de novo.");
       if (r.campo === "documentos") return conferirDocumentos(), document.querySelector(".chk-doc").focus();
       return r.campo === "tipo" ? document.querySelector('input[name="tipo-ob"]').focus() : $(`in-${r.campo}`).focus();
     }
@@ -589,12 +612,15 @@
     }, 350);
   }
 
-  async function iniciarLote(somenteLinhas, documentos, modoCe) {
+  const iniciarLote = (...args) => umEnvio($("btn-lote"), () => iniciarLoteAgora(...args));
+
+  async function iniciarLoteAgora(somenteLinhas, documentos, modoCe) {
     const docs = documentos || conferirDocumentos();
     if (!docs) return document.querySelector(".chk-doc").focus();
     const modo = modoCe || modoCeEscolhido();
+    avisoDeEnvio("lote-erro-leitura", "");
     const r = api ? await api.processar_lote(somenteLinhas || null, docs, modo) : { ok: true };
-    if (!r.ok) return;
+    if (!r.ok) return avisoDeEnvio("lote-erro-leitura", r.erro || "");
     estado.documentos = docs;
     estado.modoCe = modo;
     estado.modo = "lote";

@@ -336,6 +336,7 @@
           <div class="dica">Depende do processo. O programa lembra a última escolha.</div>
         </fieldset>
 
+        <p class="erro-leitura" id="dados-erro" role="alert" hidden></p>
         <div class="acao linha">
           <button class="btn primario grande" id="btn-processar" type="submit">
             Baixar e anexar <svg class="ic"><use href="#i-seta"/></svg>
@@ -642,6 +643,7 @@
             <input id="ne-in-arvore" maxlength="50" placeholder="Ex.: Empenho do contrato 12/2026" spellcheck="false">
             <div class="dica">Vai no campo “Nome na Árvore” do SEI, ao lado de “NE - Nota de Empenho”. Em branco, o campo fica vazio. Até 50 caracteres.</div>
           </div>
+          <p class="erro-leitura" id="ne-dados-erro" role="alert" hidden></p>
           <div class="acao linha">
             <button class="btn primario grande" id="ne-btn-processar" type="submit">Baixar e anexar <svg class="ic"><use href="#i-seta"/></svg></button>
             <button class="btn fantasma" id="ne-btn-relatorio" type="button" data-relatorio-geral><svg class="ic" aria-hidden="true"><use href="#i-grafico"/></svg>Relatório geral</button>

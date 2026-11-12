@@ -170,6 +170,7 @@ from automacoes.sigef_sei.etapa_listar_baixar import (  # noqa: E402
     salvar_sessao,
 )
 from automacoes.geral import gravar_json, pode_abrir  # noqa: E402
+from janela.reserva import OCUPADA, RESERVA  # noqa: E402
 from automacoes.sigef_sei import etapa_sei2  # noqa: E402
 from automacoes.sigef_sei.documentos import DOCUMENTOS, normalizar_documentos  # noqa: E402
 from automacoes.sigef_sei import metricas  # noqa: E402
@@ -334,6 +335,7 @@ class Trabalhador(threading.Thread):
                     mensagem="Outra automação (BB ou DARE) está usando o Chrome agora. "
                              "Espere ela terminar e clique em “Continuar de onde parou”.",
                 )
+                RESERVA.liberar()
                 continue
             try:
                 if ne:  # a NE tem a página e os eventos dela: nada vai para a tela da OB
@@ -349,6 +351,7 @@ class Trabalhador(threading.Thread):
             finally:
                 if usa_chrome:
                     modulos_janela.USO_DO_CHROME.release()
+                    RESERVA.liberar()  # reservada no clique (Api.processar & cia.)
         self._soltar()
 
     # ---- comandos ----
@@ -626,6 +629,8 @@ class Api:
         if not escolhidos:
             return {"ok": False, "campo": "documentos"}
         modo_ce = _lembrar_modo_ce(modo_ce)
+        if not RESERVA.tentar():  # segundo clique: não enfileira a mesma OB de novo
+            return dict(OCUPADA)
         trabalhador.comandos.put(
             ("processar", {"processo": normalizado, "ob": ob, "tipo_ob": TIPOS_OB[tipo_ob],
                            "documentos": list(escolhidos), "ce_impressao": modo_ce == "impressao"})
@@ -687,6 +692,8 @@ class Api:
         if not itens:
             return {"ok": False}
         modo_ce = _lembrar_modo_ce(modo_ce)
+        if not RESERVA.tentar():
+            return dict(OCUPADA)
         trabalhador.comandos.put(("lote", {"itens": itens, "documentos": list(escolhidos),
                                            "ce_impressao": modo_ce == "impressao"}))
         return {"ok": True, "quantidade": len(itens)}

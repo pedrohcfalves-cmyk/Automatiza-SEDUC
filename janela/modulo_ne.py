@@ -20,6 +20,7 @@ import os
 from datetime import date
 
 from automacoes.geral import pode_abrir
+from janela.reserva import OCUPADA, RESERVA
 from automacoes.ne import __version__, etapa, lote, relatorio
 from automacoes.sigef_sei.etapa_listar_baixar import PASTA_BASE, carregar_sessao, normalizar_processo_sei
 from automacoes.sigef_sei.preparar_navegador import DOMINIO_SIGEF, _garantir_url_certa
@@ -88,6 +89,8 @@ def _processar(d: dict) -> dict:
     if not ne:
         return {"ok": False, "campo": "ne"}
     nome_arvore = (d.get("nome_arvore") or "").strip()[:50]  # 50: o limite do campo no SEI
+    if not RESERVA.tentar():  # segundo clique: não enfileira a mesma NE de novo
+        return dict(OCUPADA)
     _e.trabalhador.comandos.put(("ne_processar", {"processo": processo, "ne": ne["ne"], "nome_arvore": nome_arvore}))
     return {"ok": True, "processo": processo, "ne": ne["ne"], "ne_completa": ne["completa"]}
 
@@ -135,6 +138,8 @@ def _processar_lote(d: dict) -> dict:
         item.ja_concluida = etapa.ne_ja_concluida(item.processo, item.ne)
     if not itens:
         return {"ok": False, "erro": "A lista não tem nenhuma linha válida."}
+    if not RESERVA.tentar():
+        return dict(OCUPADA)
     _e.trabalhador.parar_lote.clear()
     _e.trabalhador.comandos.put(("ne_lote", {"itens": itens}))
     return {"ok": True, "quantidade": len(itens)}

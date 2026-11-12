@@ -30,6 +30,7 @@ if sync_playwright:
     import app_janela as A  # noqa: E402
     sys.stdout, sys.stderr, builtins.input = _saida, _erros, _input
     from ponte_pagina import PaginaComPython  # noqa: E402
+    from janela.reserva import RESERVA  # noqa: E402
 
 
 @unittest.skipIf(sync_playwright is None, "Playwright não instalado")
@@ -53,6 +54,7 @@ class TestaEscolhaDaCe(unittest.TestCase):
         self.p.fechar()
 
     def _esvaziar(self):
+        RESERVA.liberar()  # sem Trabalhador rodando, ninguém libera a reserva do clique
         while not A.trabalhador.comandos.empty():
             A.trabalhador.comandos.get_nowait()
 
@@ -121,11 +123,36 @@ class TestaEscolhaDaCe(unittest.TestCase):
         self.assertIs(args["ce_impressao"], True)
         self.assertEqual(len(args["itens"]), 1)
 
+    def test_automacao_em_andamento_avisa_e_nao_enfileira_de_novo(self):
+        self._passo3()
+        RESERVA.tentar()  # já há uma OB na fila (clique anterior)
+        self.p.page.fill("#in-processo", "0029001947202667")
+        self.p.page.fill("#in-ob", "2026OB136475")
+        self._escolher("tipo-ob", "regularizacao")
+        self.p.page.click("#btn-processar")
+        self.p.esperar("!document.getElementById('dados-erro').hidden", segundos=5, mensagem="aviso na tela")
+        self.assertIn("Já há uma automação em andamento", self.p.texto("#dados-erro"))
+        self.assertTrue(A.trabalhador.comandos.empty())
+        self.assertTrue(self.p.page.is_visible("#tela-dados"))
+
+    def test_lote_com_automacao_em_andamento_avisa(self):
+        self._passo3()
+        self.p.page.click("#aba-lote")
+        self.p.page.fill("#in-lista", "0029.001947/2026-67\t2026OB136475\tRegularização")
+        self.p.page.dispatch_event("#in-lista", "input")
+        self.p.esperar("!document.getElementById('btn-lote').disabled", mensagem="lista conferida")
+        RESERVA.tentar()
+        self.p.page.click("#btn-lote")
+        self.p.esperar("!document.getElementById('lote-erro-leitura').hidden", segundos=5, mensagem="aviso na tela")
+        self.assertIn("Já há uma automação em andamento", self.p.texto("#lote-erro-leitura"))
+        self.assertTrue(A.trabalhador.comandos.empty())
+
     def test_api_aceita_janela_antiga_e_valor_estranho(self):
         api = A.Api()
         r = api.processar("0029001947202667", "136475", "regularizacao", ["CE"])  # sem modo_ce
         self.assertTrue(r["ok"])
         self.assertIs(self._comando()[1]["ce_impressao"], False)
+        RESERVA.liberar()
         r = api.processar("0029001947202667", "136475", "regularizacao", ["CE"], "qualquer")
         self.assertEqual(r["modo_ce"], "pp")
         self.assertIs(self._comando()[1]["ce_impressao"], False)

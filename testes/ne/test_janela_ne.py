@@ -29,6 +29,7 @@ import app_janela as A  # noqa: E402
 sys.stdout, sys.stderr, builtins.input = _saida, _erros, _input
 
 M = A._modulo_ne()  # janela/modulo_ne.py, já ligado à janela
+from janela.reserva import RESERVA  # noqa: E402
 from automacoes import geral  # noqa: E402
 
 geral._aplicar(2026)  # os números dos testes são de 2026, seja qual for o ano do relógio
@@ -47,6 +48,7 @@ class Base(unittest.TestCase):
             p.start()
             self.addCleanup(p.stop)
         self.addCleanup(self._esvaziar_filas)
+        self.addCleanup(RESERVA.liberar)
         self.ne = A.Api().ne
 
     @staticmethod
@@ -84,6 +86,7 @@ class TestPorta(Base):
         self.assertEqual(r, {"ok": True, "processo": PROC, "ne": "000123", "ne_completa": "2026NE000123"})
         self.assertEqual(A.trabalhador.comandos.get_nowait(),
                          ("ne_processar", {"processo": PROC, "ne": "000123", "nome_arvore": ""}))
+        RESERVA.liberar()  # como se o Trabalhador tivesse terminado a primeira
         self.ne("processar", {"processo": PROC, "ne": "123", "nome_arvore": "  " + "x" * 60 + " "})
         self.assertEqual(A.trabalhador.comandos.get_nowait()[1]["nome_arvore"], "x" * 50)  # limite do SEI
 
@@ -95,7 +98,45 @@ class TestPorta(Base):
         comando, argumentos = A.trabalhador.comandos.get_nowait()
         self.assertEqual(comando, "ne_lote")
         self.assertEqual([i.ne for i in argumentos["itens"]], ["000001", "000002"])
+        RESERVA.liberar()  # como se o Trabalhador tivesse terminado o lote
         self.assertEqual(self.ne("processar_lote", {"linhas": [2]})["quantidade"], 1)  # tentar de novo só a linha 2
+
+    def test_segundo_clique_em_processar_e_recusado(self):
+        self.assertTrue(self.ne("processar", {"processo": PROC, "ne": "123"})["ok"])
+        r = self.ne("processar", {"processo": PROC, "ne": "123"})
+        self.assertFalse(r["ok"])
+        self.assertIn("Já há uma automação em andamento", r["erro"])
+        self.assertEqual(A.trabalhador.comandos.qsize(), 1)  # só a primeira foi para a fila
+
+    def test_segundo_clique_em_iniciar_lote_e_recusado(self):
+        self.ne("ler_texto", {"texto": LISTA})
+        self.assertTrue(self.ne("processar_lote")["ok"])
+        r = self.ne("processar_lote")
+        self.assertFalse(r["ok"])
+        self.assertIn("Já há uma automação em andamento", r["erro"])
+        self.assertEqual(A.trabalhador.comandos.qsize(), 1)
+
+    def test_campo_errado_nao_prende_a_reserva(self):
+        self.ne("processar", {"processo": "1", "ne": "123"})
+        self.assertFalse(RESERVA.ocupada)
+
+    def test_ob_segundo_clique_em_processar_e_recusado(self):
+        api, dados = A.Api(), dict(processo=PROC, ob="2026OB000001", tipo_ob=next(iter(A.TIPOS_OB)), documentos=["OB"])
+        self.assertTrue(api.processar(**dados)["ok"])
+        r = api.processar(**dados)
+        self.assertEqual((r["ok"], "campo" in r), (False, False))
+        self.assertIn("Já há uma automação em andamento", r["erro"])
+        self.assertEqual(A.trabalhador.comandos.qsize(), 1)
+
+    def test_ob_segundo_clique_em_iniciar_lote_e_recusado(self):
+        api = A.Api()
+        api.ler_lote_texto(f"{PROC} 2026OB000001", next(iter(A.TIPOS_OB)))
+        with mock.patch.object(A.etapa_sei2, "ob_ja_concluida", return_value=False):
+            self.assertTrue(api.processar_lote(documentos=["OB"])["ok"])
+            r = api.processar_lote(documentos=["OB"])
+        self.assertFalse(r["ok"])
+        self.assertIn("Já há uma automação em andamento", r["erro"])
+        self.assertEqual(A.trabalhador.comandos.qsize(), 1)
 
     def test_lista_sem_linha_valida(self):
         self.ne("ler_texto", {"texto": "nada aqui 1"})
@@ -201,6 +242,25 @@ class TestTrabalhador(Base):
         processar.assert_not_called()
         self.assertEqual(self.tipos(), ["ne_erro"])
         self.assertIn("usando o Chrome", self.eventos[0][1]["mensagem"])
+
+    def test_reserva_e_liberada_quando_o_comando_termina(self):
+        RESERVA.tentar()  # o clique reservou
+        with mock.patch.object(M.etapa, "processar_ne", side_effect=SystemExit("boom de teste")):
+            self.rodar(("ne_processar", {"processo": PROC, "ne": "000001"}))
+        self.assertFalse(RESERVA.ocupada, "erro na automação não pode prender o botão")
+
+    def test_reserva_e_liberada_quando_o_chrome_esta_com_outra_automacao(self):
+        self.assertTrue(A.modulos_janela.USO_DO_CHROME.acquire(blocking=False))
+        self.addCleanup(A.modulos_janela.USO_DO_CHROME.release)
+        RESERVA.tentar()
+        self.rodar(("ne_processar", {"processo": PROC, "ne": "000001"}))
+        self.assertFalse(RESERVA.ocupada)
+
+    def test_conectar_nao_mexe_na_reserva(self):
+        RESERVA.tentar()  # uma automação em andamento (reservada no clique)
+        with mock.patch.object(self.t, "_conectar", lambda: None):
+            self.rodar(("ne_conectar", {}))
+        self.assertTrue(RESERVA.ocupada)
 
     def test_conectar_avisa_a_ne(self):
         with mock.patch.object(self.t, "_conectar", lambda: None):

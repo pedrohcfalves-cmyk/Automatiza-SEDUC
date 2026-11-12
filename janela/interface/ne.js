@@ -360,14 +360,36 @@
     return r;
   }
 
-  async function processar(ev) {
-    if (ev) ev.preventDefault();
+  // Um envio por vez: o segundo clique (ou Enter) enquanto o Python responde não manda de novo.
+  let enviando = false;
+  async function umEnvio(botao, fazer) {
+    if (enviando) return;
+    enviando = true;
+    const antes = botao.disabled;
+    botao.disabled = true;
+    try {
+      return await fazer();
+    } finally {
+      enviando = false;
+      botao.disabled = antes;
+    }
+  }
+
+  function avisoDeEnvio(id, texto) {
+    $(id).textContent = texto || "";
+    $(id).hidden = !texto;
+  }
+
+  const processar = (ev) => (ev && ev.preventDefault(), umEnvio($("ne-btn-processar"), processarAgora));
+
+  async function processarAgora() {
+    avisoDeEnvio("ne-dados-erro", "");
     const v = await conferir(true);
     if (!v.processo) return $("ne-in-processo").focus();
     if (!v.ne) return $("ne-in-ne").focus();
     const nomeArvore = $("ne-in-arvore").value.trim();
     const r = await chamar("processar", { processo: $("ne-in-processo").value, ne: $("ne-in-ne").value, nome_arvore: nomeArvore });
-    if (!r.ok) return $(`ne-in-${r.campo || "ne"}`).focus();
+    if (!r.ok) return r.campo ? $(`ne-in-${r.campo}`).focus() : avisoDeEnvio("ne-dados-erro", r.erro || "Não consegui começar. Tente de novo.");
     s.modo = "um";
     s.nomeArvore = nomeArvore;
     s.processo = r.processo;
@@ -439,9 +461,12 @@
     }, 350);
   }
 
-  async function iniciarLote(linhas) {
+  const iniciarLote = (linhas) => umEnvio($("ne-btn-lote"), () => iniciarLoteAgora(linhas));
+
+  async function iniciarLoteAgora(linhas) {
+    avisoDeEnvio("ne-lote-erro-leitura", "");
     const r = await chamar("processar_lote", { linhas: linhas || null });
-    if (!r.ok) return;
+    if (!r.ok) return avisoDeEnvio("ne-lote-erro-leitura", r.erro || "");
     s.modo = "lote";
     s.lote.itens = [];
     iniciarExecucao("Lote · começando");
