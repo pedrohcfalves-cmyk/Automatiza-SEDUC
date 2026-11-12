@@ -73,7 +73,7 @@ import unicodedata
 
 from playwright.sync_api import Error as PlaywrightError, TimeoutError as PlaywrightTimeoutError
 
-from automacoes.geral import gravar_json
+from automacoes.geral import gravar_json, processo_na_arvore
 from automacoes.anexar.automacao import interacao
 from automacoes.anexar.automacao.utils import (
     PASTA_BASE,
@@ -279,12 +279,26 @@ def abrir_processo_sei(aba_sei, processo: str, timeout_ms: int = 30000):
             _aguardar_rede(aba_sei, timeout=timeout_ms)
 
     # ---- a tela do processo só está pronta com a árvore montada ----
+    # ...e só vale se a árvore for do processo pedido: documento criado no processo errado não tem volta.
     prazo = time.monotonic() + timeout_ms / 1000
+    arvore_montou = False
     while time.monotonic() < prazo:
-        if aba_sei.frame(name="ifrArvore") is not None:
-            print(f"Processo '{processo}' aberto no SEI.")
-            return aba_sei
+        arvore = aba_sei.frame(name="ifrArvore")
+        if arvore is not None:
+            arvore_montou = True
+            try:
+                texto_arvore = arvore.locator("body").inner_text()
+            except Exception:  # a árvore ainda está carregando
+                texto_arvore = ""
+            if processo_na_arvore(texto_arvore, processo):
+                print(f"Processo '{processo}' aberto no SEI.")
+                return aba_sei
         aba_sei.wait_for_timeout(200)
+
+    if arvore_montou:
+        raise RuntimeError(
+            f"O SEI não abriu o processo {processo}. Nada foi anexado. Confira o número e tente de novo."
+        )
 
     raise SystemExit(
         f"\n⚠️  Pesquisei '{processo}' na Pesquisa Rápida do SEI, mas a tela "

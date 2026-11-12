@@ -9,6 +9,7 @@ OB, SEI(2)).
 from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError
 
 from automacoes.anexar.automacao import dados_processo, interacao
+from automacoes.geral import processo_na_arvore
 from automacoes.anexar.automacao.utils import (
     URL_SEI,
     carregar_sessao,
@@ -51,6 +52,18 @@ def abrir_processo_sei(aba_sei: Page, processo: str, timeout_ms: int = 15000) ->
             f"Não achei o processo '{processo}' no SEI. Confira se o número "
             "está certo (olhe no SEI) e rode o programa de novo."
         ) from erro
+
+    # A árvore que abriu é mesmo a do processo pedido? Documento criado no processo errado não tem volta.
+    passos = max(1, timeout_ms // 200)
+    for _ in range(passos):
+        try:
+            texto_arvore = aba_sei.frame(name="ifrArvore").locator("body").inner_text()
+        except Exception:  # noqa: BLE001 - a árvore ainda está carregando
+            texto_arvore = ""
+        if processo_na_arvore(texto_arvore, processo):
+            return
+        aba_sei.wait_for_timeout(200)
+    raise RuntimeError(f"O SEI não abriu o processo {processo}. Nada foi anexado. Confira o número e tente de novo.")
 
 
 MAX_LANCAMENTOS = dados_processo.MAX_LANCAMENTOS

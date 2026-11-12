@@ -47,6 +47,14 @@ def pode_abrir(caminho) -> bool:
     return bool(caminho) and os.path.exists(caminho) and os.path.splitext(caminho)[1].lower() not in EXTENSOES_PROIBIDAS
 
 
+def processo_na_arvore(texto_arvore: str, processo: str) -> bool:
+    """True se o número do processo (só dígitos) aparece no texto da árvore do SEI."""
+    alvo = "".join(c for c in (processo or "") if c.isdigit())
+    if len(alvo) < 10:  # número curto demais para conferir: não aprova nada
+        return False
+    return alvo in "".join(c for c in (texto_arvore or "") if c.isdigit())
+
+
 def gravar_json(caminho: str, dados) -> None:
     """Grava de forma atômica (temporário + os.replace): queda no meio não deixa o JSON pela metade."""
     temporario = f"{caminho}.tmp"
