@@ -15,7 +15,9 @@ from playwright.sync_api import Page, sync_playwright, TimeoutError as Playwrigh
 from automacoes.geral import gravar_json
 from automacoes.anexar import caminhos
 from automacoes.anexar.automacao import interacao
-from automacoes.anexar.automacao.valores import normalizar, padronizar_mes, padronizar_valor  # noqa: F401 (usadas pelas etapas)
+from automacoes.anexar.automacao.valores import (  # noqa: F401 (usadas pelas etapas)
+    normalizar, padronizar_mes, padronizar_valor, sessao_ao_trocar_de_processo,
+)
 from automacoes.anexar.sistema import ambiente
 
 # ===== URLs dos sistemas =====
@@ -260,6 +262,8 @@ def salvar_sessao(**novos_valores) -> None:
     guarda só o CE, mantendo processo/dados que já estavam salvos.
     """
     sessao = carregar_sessao()
+    if "processo" in novos_valores:
+        sessao = sessao_ao_trocar_de_processo(sessao, novos_valores["processo"])
     sessao.update(novos_valores)
     caminhos.garantir_pasta(CAMINHO_SESSAO)
     gravar_json(CAMINHO_SESSAO, sessao)

@@ -2329,7 +2329,12 @@ def executar_sei2(
     # O que já foi feito no SEI para esta OB, se for uma nova tentativa.
     ob = (dados or {}).get("ob") or (carregar_sessao().get("lancamentos_ob") or "")
     progresso = ProgressoSei(processo, ob)
-    avisos = []
+    # O que o download avisou (NL com erro, CE que não imprimiu) vai para a conferência final.
+    # Com `dados` vale o que veio nele (já filtrado pelos documentos marcados); sozinha, a sessão deste processo.
+    origem_avisos = dados if dados is not None else carregar_sessao()
+    if origem_avisos.get("processo") not in (None, processo):
+        origem_avisos = {}
+    avisos = list(dict.fromkeys(origem_avisos.get("avisos_download") or []))
     if progresso.retomando:
         prontos = sum(1 for d in progresso.documentos.values() if d.get("estado") == "salvo")
         print(f"\n🔁 Continuando de onde parou: {prontos} documento(s) já anexado(s) nesta OB.")

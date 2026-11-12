@@ -93,3 +93,18 @@ def padronizar_valor(valor) -> tuple[str, str]:
     inteiro, cent = divmod(centavos, 100)
     return str(centavos), f"{inteiro:,}".replace(",", ".") + f",{cent:02d}"
 
+
+# O que pertence a UM processo (o resto -- escola, contas, CNPJ... -- é reaproveitado no próximo).
+CHAVES_DO_PROCESSO = ("lancamentos", "ce", "ob", "grupos_ce", "lancamentos_ob", "avisos_download", "download_completo")
+
+
+def sessao_ao_trocar_de_processo(sessao: dict, novo_processo: str) -> dict:
+    """
+    Devolve a sessão sem os dados do processo anterior, se o processo mudou.
+    Sem isso, o processo novo "herdaria" NL/PP/OB do anterior quando valor e NE coincidem.
+    Compara só os dígitos: o mesmo processo com e sem pontuação é o mesmo.
+    """
+    antigo, novo = (sessao.get("processo") or "").strip(), (novo_processo or "").strip()
+    if not antigo or antigo == novo or (so_digitos(antigo) and so_digitos(antigo) == so_digitos(novo)):
+        return sessao
+    return {k: v for k, v in sessao.items() if k not in CHAVES_DO_PROCESSO}

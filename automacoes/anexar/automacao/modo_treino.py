@@ -26,6 +26,7 @@ import time
 from automacoes.geral import gravar_json
 from automacoes.anexar import caminhos
 from automacoes.anexar.automacao import dados_processo, interacao
+from automacoes.anexar.automacao.valores import sessao_ao_trocar_de_processo
 
 CAMINHO_SESSAO = os.environ.get("ANEXAR_SESSAO_SIMULADA") or caminhos.ARQUIVO_SESSAO_TREINO
 PAUSA = float(os.environ.get("ANEXAR_DEMO_PAUSA", "1"))
@@ -59,6 +60,8 @@ def carregar_sessao() -> dict:
 
 def salvar_sessao(**valores) -> None:
     sessao = carregar_sessao()
+    if "processo" in valores:
+        sessao = sessao_ao_trocar_de_processo(sessao, valores["processo"])
     sessao.update(valores)
     caminhos.garantir_pasta(CAMINHO_SESSAO)
     gravar_json(CAMINHO_SESSAO, sessao)

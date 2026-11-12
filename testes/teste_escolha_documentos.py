@@ -376,9 +376,11 @@ class TestaDownload(unittest.TestCase):
 
 
 class TestaSei(unittest.TestCase):
-    def _anexar(self, documentos):
+    def _anexar(self, documentos, avisos_download=None, avisos_saida=None):
         baixar.salvar_sessao(download_completo=False)
         dados, _ = _simular_download(None)
+        if avisos_download is not None:
+            dados["avisos_download"] = avisos_download
         chamadas = []
         originais = (sei._anexar_documento, sei.obter_ou_criar_aba, sei.abrir_processo_sei,
                      sei._aguardar_rede, sei._procurar_lugar)
@@ -389,11 +391,22 @@ class TestaSei(unittest.TestCase):
         sei._procurar_lugar = lambda *a, **k: (None, None, None)
         try:
             sei.executar_sei2(None, "0029.001947/2026-67", dados=dados, tipo_ob="OB - x",
-                              conferir_no_fim=False, documentos=documentos)
+                              conferir_no_fim=False, documentos=documentos, avisos_saida=avisos_saida)
         finally:
             (sei._anexar_documento, sei.obter_ou_criar_aba, sei.abrir_processo_sei,
              sei._aguardar_rede, sei._procurar_lugar) = originais
         return chamadas
+
+    def test_avisos_do_download_chegam_a_conferencia(self):
+        saida = []
+        self._anexar(None, avisos_download=["NL 2026NL000009 deu erro no SIGEF", "CE x NÃO foi anexada"],
+                     avisos_saida=saida)
+        self.assertEqual(saida, ["NL 2026NL000009 deu erro no SIGEF", "CE x NÃO foi anexada"])
+
+    def test_aviso_de_nl_nao_pedida_nao_aparece(self):
+        saida = []
+        self._anexar(["PP", "OB"], avisos_download=["NL 2026NL000009 deu erro no SIGEF"], avisos_saida=saida)
+        self.assertEqual(saida, [])
 
     def test_tudo_na_ordem_de_sempre(self):
         self.assertEqual(self._anexar(None), [
