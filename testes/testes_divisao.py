@@ -326,19 +326,21 @@ class TestaAnexarDocumento(unittest.TestCase):
         self.assertEqual(len(self.criados), 1)
         self.assertEqual(self.colados[0][1], arquivos)  # caminhos de sempre (já cabiam em 250 KB)
         self.assertEqual(self.confirmados, [("https://sei/editor/1", 3)])
-        self.assertEqual(self.gravado(), {"CE 2026CE000123": {"estado": "salvo"}})  # sem "partes"
+        self.assertEqual(self.gravado(), {"CE 2026CE000123": {  # sem "partes"
+            "estado": "salvo", "impressao": sei.impressao_dos_arquivos(arquivos)}})
         self.assertEqual(avisos, [])
 
     def test_b_duas_partes(self):
         progresso = self.progresso()
         arquivos = self.jpgs(8)
         avisos = self.anexar(progresso, arquivos)
+        impressao = sei.impressao_dos_arquivos(arquivos)  # do documento inteiro, igual nas duas partes
         self.assertEqual(len(self.criados), 2)
         self.assertEqual([c[1] for c in self.colados], [arquivos[:4], arquivos[4:]])
         self.assertEqual([qtd for _url, qtd in self.confirmados], [4, 4])  # imagens DA PARTE
         self.assertEqual(self.gravado(), {
-            "CE 2026CE000123 · parte 1/2": {"estado": "salvo", "partes": 2},
-            "CE 2026CE000123 · parte 2/2": {"estado": "salvo", "partes": 2},
+            "CE 2026CE000123 · parte 1/2": {"estado": "salvo", "partes": 2, "impressao": impressao},
+            "CE 2026CE000123 · parte 2/2": {"estado": "salvo", "partes": 2, "impressao": impressao},
         })
         self.assertEqual(len(avisos), 1)
         self.assertIn("dividida em 2 documentos (4 + 4 páginas)", avisos[0])
@@ -379,13 +381,40 @@ class TestaAnexarDocumento(unittest.TestCase):
         self.assertEqual(self.criados, [])
         self.assertEqual(self.colados, [])
 
+    def test_d2_salvo_com_os_mesmos_arquivos_pula_sem_aviso(self):
+        arquivos = self.jpgs(3)
+        self.anexar(self.progresso(), arquivos)
+        avisos = self.anexar(self.progresso(), arquivos)  # nova execução, mesmos arquivos
+        self.assertEqual(len(self.criados), 1)
+        self.assertEqual(avisos, [])
+
+    def test_d3_salvo_mas_os_arquivos_mudaram_pula_e_avisa(self):
+        arquivos = self.jpgs(3)
+        self.anexar(self.progresso(), arquivos)
+        with open(arquivos[1], "wb") as arquivo:  # o SIGEF devolveu outro documento na segunda vez
+            arquivo.write(b"\x00" * 1000)
+        avisos = self.anexar(self.progresso(), arquivos)
+        self.assertEqual(len(self.criados), 1, "não cria duplicata sem decisão humana")
+        self.assertEqual(len(avisos), 1)
+        self.assertIn("os arquivos mudaram", avisos[0])
+
+    def test_d4_parte_salva_e_arquivos_mudaram_avisa_uma_vez_por_parte(self):
+        arquivos = self.jpgs(8)
+        self.anexar(self.progresso(), arquivos)
+        with open(arquivos[0], "wb") as arquivo:
+            arquivo.write(b"\xff" * 249_000)
+        avisos = [a for a in self.anexar(self.progresso(), arquivos) if "os arquivos mudaram" in a]
+        self.assertEqual(len(self.criados), 2)  # as duas partes da primeira vez; nada novo
+        self.assertEqual(len(avisos), 2)
+
     def test_e_parte_1_salva_so_faz_a_parte_2(self):
         progresso = self.progresso({"CE 2026CE000123 · parte 1/2": {"estado": "salvo", "partes": 2}})
         arquivos = self.jpgs(8)
         self.anexar(progresso, arquivos)
         self.assertEqual(len(self.criados), 1)
         self.assertEqual(self.colados[0][1], arquivos[4:])
-        self.assertEqual(self.gravado()["CE 2026CE000123 · parte 2/2"], {"estado": "salvo", "partes": 2})
+        self.assertEqual(self.gravado()["CE 2026CE000123 · parte 2/2"],
+                         {"estado": "salvo", "partes": 2, "impressao": sei.impressao_dos_arquivos(arquivos)})
 
     def test_e2_plano_diferente_do_gravado_avisa(self):
         progresso = self.progresso({"CE 2026CE000123 · parte 1/3": {"estado": "salvo", "partes": 3}})
@@ -431,7 +460,7 @@ class TestaAnexarDocumento(unittest.TestCase):
         self.falha_confirmacao = lambda n: SystemExit("Timeout") if n == 1 else None
         self.anexar(self.progresso(), self.jpgs(2))
         self.assertEqual(len(self.colados), 2)
-        self.assertEqual(self.gravado(), {"CE 2026CE000123": {"estado": "salvo"}})
+        self.assertEqual(self.gravado()["CE 2026CE000123"]["estado"], "salvo")
 
 
 class TestaPlanejarPartes(unittest.TestCase):

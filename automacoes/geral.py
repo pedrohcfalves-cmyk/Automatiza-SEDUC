@@ -16,6 +16,7 @@ volta a valer sozinho, sem ninguém precisar lembrar.
 O DARE e o BB não dependem do exercício do SIGEF (o DARE pede o mês/ano de
 referência em cada lançamento; o BB não usa ano).
 """
+import hashlib
 import json
 import os
 import re
@@ -59,6 +60,38 @@ def mascarar_cpf(texto) -> str:
     """CPF para registros e logs: ***.456.789-** (o inteiro não vai para arquivo)."""
     d = "".join(c for c in str(texto or "") if c.isdigit())
     return f"***.{d[3:6]}.{d[6:9]}-**" if len(d) == 11 else "***"
+
+
+def impressao_dos_arquivos(caminhos) -> str:
+    """Resumo (hash) do nome, tamanho e conteúdo dos arquivos, na ordem dada. Arquivo ausente não levanta."""
+    resumo = hashlib.sha256()
+    for caminho in caminhos:
+        resumo.update(os.path.basename(str(caminho)).encode("utf-8"))
+        try:
+            with open(caminho, "rb") as arquivo:
+                conteudo = arquivo.read()
+        except OSError:
+            conteudo = b"ausente"
+        resumo.update(f"|{len(conteudo)}|".encode())
+        resumo.update(conteudo)
+    return resumo.hexdigest()
+
+
+def decidir_pulo(estado: dict, impressao_atual: str, descricao: str = "") -> tuple:
+    """
+    Retomada no SEI: (pular?, aviso). Documento "salvo" numa tentativa anterior é sempre pulado
+    (não se cria duplicata sem decisão humana); se os arquivos de agora não são os da vez em que
+    foi salvo, o aviso vai para a conferência final. Registro antigo, sem impressão: pula sem aviso.
+    """
+    if (estado or {}).get("estado") != "salvo":
+        return False, None
+    gravada = estado.get("impressao")
+    if gravada and impressao_atual and gravada != impressao_atual:
+        return True, (
+            f"{descricao}: já havia um documento salvo numa tentativa anterior, mas os arquivos mudaram. "
+            "O documento antigo continua no SEI — confira e exclua o antigo se for o caso."
+        )
+    return True, None
 
 
 def gravar_json(caminho: str, dados) -> None:

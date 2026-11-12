@@ -57,7 +57,7 @@ from urllib.parse import urljoin
 from playwright.sync_api import Error as PlaywrightError, TimeoutError as PlaywrightTimeoutError
 
 # etapa_listar_baixar.py é o arquivo de utilitários deste fluxo.
-from automacoes.geral import gravar_json
+from automacoes.geral import decidir_pulo, gravar_json, impressao_dos_arquivos
 from .etapa_listar_baixar import (
     PASTA_BASE,
     URL_SEI,
@@ -1997,9 +1997,15 @@ def _anexar_documento(
     "salvo", o documento coube daquela vez -- pula, como sempre.
     """
     estado = progresso.estado(chave)
+    # Dos arquivos ORIGINAIS (as partes levam cópias reduzidas): é o que se compara numa retomada.
+    impressao = impressao_dos_arquivos(arquivos)
 
-    if estado.get("estado") == "salvo":
+    pular, aviso = decidir_pulo(estado, impressao, descricao)
+    if pular:
         print(f"\n⏭️  {descricao}: já foi anexado numa tentativa anterior -- pulando.")
+        if aviso:
+            avisos.append(aviso)
+            print(f"   ⚠️  {aviso}")
         return
 
     partes = _planejar_partes(arquivos) or [[]]
@@ -2023,7 +2029,7 @@ def _anexar_documento(
     if total_partes == 1:
         _anexar_parte(
             context, aba_sei, progresso, avisos, chave, descricao, texto_link, rotulo, partes[0],
-            numero_pp=numero_pp, nome_arvore=nome_arvore,
+            numero_pp=numero_pp, nome_arvore=nome_arvore, impressao=impressao,
         )
         return
 
@@ -2066,14 +2072,14 @@ def _anexar_documento(
             context, aba_sei, progresso, avisos,
             f"{chave} · parte {indice}/{total_partes}", f"{descricao} (parte {indice}/{total_partes})",
             texto_link, rotulo, parte, numero_pp=numero_pp, extra_progresso={"partes": total_partes},
-            nome_arvore=nome_arvore,
+            nome_arvore=nome_arvore, impressao=impressao,
         )
 
 
 def _anexar_parte(
     context, aba_sei, progresso: ProgressoSei, avisos: list,
     chave: str, descricao: str, texto_link: str, rotulo: str, arquivos: list[str],
-    numero_pp: str = None, extra_progresso: dict = None, nome_arvore: str = "",
+    numero_pp: str = None, extra_progresso: dict = None, nome_arvore: str = "", impressao: str = None,
 ) -> None:
     """
     Inclui UM documento no SEI (ou uma parte dele) e cola as imagens
@@ -2090,8 +2096,12 @@ def _anexar_parte(
     extra = extra_progresso or {}
     estado = progresso.estado(chave)
 
-    if estado.get("estado") == "salvo":
+    pular, aviso = decidir_pulo(estado, impressao, descricao)
+    if pular:
         print(f"\n⏭️  {descricao}: já foi anexado numa tentativa anterior -- pulando.")
+        if aviso:
+            avisos.append(aviso)
+            print(f"   ⚠️  {aviso}")
         return
 
     print(f"\n📄 {descricao} ({len(arquivos)} página(s))...")
@@ -2198,7 +2208,7 @@ def _anexar_parte(
                 pass
             time.sleep(espera)
 
-    progresso.marcar(chave, "salvo", **extra)
+    progresso.marcar(chave, "salvo", **extra, **({"impressao": impressao} if impressao else {}))
     pagina_editor.close()
     aba_sei.bring_to_front()
 
