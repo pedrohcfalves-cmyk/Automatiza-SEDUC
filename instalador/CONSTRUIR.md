@@ -21,7 +21,7 @@ Na máquina de destino só precisa de:
 Uma vez, na máquina que constrói:
 
 ```bash
-python -m pip install -r requirements.txt pyinstaller
+python -m pip install -r requirements.txt pyinstaller -c constraints.txt
 winget install --id JRSoftware.InnoSetup -e --scope user
 ```
 

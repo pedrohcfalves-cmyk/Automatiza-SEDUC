@@ -546,9 +546,13 @@ mudança de comportamento. O que mudou em cada versão está no
 ### Gerar o instalador
 
 ```bash
-python -m pip install -r requirements.txt pyinstaller
+python -m pip install -r requirements.txt pyinstaller -c constraints.txt
 python instalador/construir.py
 ```
+
+O `constraints.txt` trava as versões do ambiente que gerou o instalador
+(Python 3.14.6): reconstruir daqui a meses sai com os mesmos pacotes. O
+código-fonte deve rodar em Python 3.10+ (não verificado em todas as versões).
 
 Passo a passo em [`instalador/CONSTRUIR.md`](instalador/CONSTRUIR.md).
 
