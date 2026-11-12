@@ -19,6 +19,7 @@ SEI" (a Ordem Bancária). O que as duas dividem é só o que não dá para separ
 import os
 from datetime import date
 
+from automacoes.geral import pode_abrir
 from automacoes.ne import __version__, etapa, lote, relatorio
 from automacoes.sigef_sei.etapa_listar_baixar import PASTA_BASE, carregar_sessao, normalizar_processo_sei
 from automacoes.sigef_sei.preparar_navegador import DOMINIO_SIGEF, _garantir_url_certa
@@ -166,7 +167,7 @@ def _relatorio(d: dict) -> dict:
 
 
 def _abrir(caminho: str, pasta: bool) -> dict:
-    alvo = caminho if caminho and (os.path.isdir(caminho) if pasta else os.path.exists(caminho)) else ""
+    alvo = caminho if caminho and (os.path.isdir(caminho) if pasta else pode_abrir(caminho)) else ""
     if pasta and not alvo:
         alvo = PASTA_BASE
     if alvo:

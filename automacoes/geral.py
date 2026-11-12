@@ -37,6 +37,16 @@ PRIMEIRO_ANO = 2020
 _ANO_NA_URL = re.compile(r"(sigef(?:hom)?\.sefin\.ro\.gov\.br/SIGEF)\d{4}/", re.IGNORECASE)
 
 
+EXTENSOES_PROIBIDAS = {".exe", ".bat", ".cmd", ".com", ".scr", ".msi", ".lnk", ".ps1", ".vbs", ".vbe",
+                       ".js", ".jse", ".wsf", ".hta", ".jar", ".reg", ".dll"}
+
+
+def pode_abrir(caminho) -> bool:
+    """Só abre o que existe e não é programa/script (a janela entrega caminhos vindos do JavaScript)."""
+    caminho = str(caminho or "")
+    return bool(caminho) and os.path.exists(caminho) and os.path.splitext(caminho)[1].lower() not in EXTENSOES_PROIBIDAS
+
+
 def gravar_json(caminho: str, dados) -> None:
     """Grava de forma atômica (temporário + os.replace): queda no meio não deixa o JSON pela metade."""
     temporario = f"{caminho}.tmp"

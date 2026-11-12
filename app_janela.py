@@ -169,7 +169,7 @@ from automacoes.sigef_sei.etapa_listar_baixar import (  # noqa: E402
     normalizar_processo_sei,
     salvar_sessao,
 )
-from automacoes.geral import gravar_json  # noqa: E402
+from automacoes.geral import gravar_json, pode_abrir  # noqa: E402
 from automacoes.sigef_sei import etapa_sei2  # noqa: E402
 from automacoes.sigef_sei.documentos import DOCUMENTOS, normalizar_documentos  # noqa: E402
 from automacoes.sigef_sei import metricas  # noqa: E402
@@ -695,7 +695,7 @@ class Api:
         trabalhador.parar_lote.set()
 
     def abrir_arquivo(self, caminho: str) -> None:
-        if caminho and os.path.exists(caminho):
+        if pode_abrir(caminho):
             os.startfile(caminho)
 
     def responder(self, texto: str = "") -> None:

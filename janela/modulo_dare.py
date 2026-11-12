@@ -51,6 +51,7 @@ from automacoes.dare import (
     utils,
 )
 from automacoes.dare.modelos import DadosDare, ResultadoLote
+from automacoes.geral import pode_abrir
 from automacoes.sigef_sei.preparar_navegador import PASTA_PERFIL_CHROME_AUTOMACAO
 from janela import modulos_janela
 
@@ -268,6 +269,8 @@ def _lotes_alterados() -> None:
 
 
 def _abrir(caminho) -> bool:
+    if not pode_abrir(caminho):
+        return False
     try:
         os.startfile(str(caminho))  # type: ignore[attr-defined]
         return True
