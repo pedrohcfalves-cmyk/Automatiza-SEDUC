@@ -12,6 +12,7 @@ from datetime import datetime
 import pymupdf
 from playwright.sync_api import Page, sync_playwright, TimeoutError as PlaywrightTimeoutError
 
+from automacoes.geral import gravar_json
 from automacoes.anexar import caminhos
 from automacoes.anexar.automacao import interacao
 from automacoes.anexar.automacao.valores import normalizar, padronizar_mes, padronizar_valor  # noqa: F401 (usadas pelas etapas)
@@ -261,8 +262,7 @@ def salvar_sessao(**novos_valores) -> None:
     sessao = carregar_sessao()
     sessao.update(novos_valores)
     caminhos.garantir_pasta(CAMINHO_SESSAO)
-    with open(CAMINHO_SESSAO, "w", encoding="utf-8") as arquivo:
-        json.dump(sessao, arquivo, ensure_ascii=False, indent=2)
+    gravar_json(CAMINHO_SESSAO, sessao)
     # A tela do aplicativo mostra, ao vivo, as NL/PP/OB que vão sendo feitas.
     interacao.avisar("sessao", sessao=interacao.resumo_da_sessao(sessao))
 

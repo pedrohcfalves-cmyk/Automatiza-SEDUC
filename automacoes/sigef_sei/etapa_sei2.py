@@ -57,6 +57,7 @@ from urllib.parse import urljoin
 from playwright.sync_api import Error as PlaywrightError, TimeoutError as PlaywrightTimeoutError
 
 # etapa_listar_baixar.py é o arquivo de utilitários deste fluxo.
+from automacoes.geral import gravar_json
 from .etapa_listar_baixar import (
     PASTA_BASE,
     URL_SEI,
@@ -1912,16 +1913,14 @@ class ProgressoSei:
     def marcar(self, chave: str, estado: str, **extra) -> None:
         self.documentos[chave] = {"estado": estado, **extra}
         os.makedirs(self.pasta, exist_ok=True)
-        with open(self.caminho, "w", encoding="utf-8") as arquivo:
-            json.dump({"ob": self.ob, "documentos": self.documentos}, arquivo, ensure_ascii=False, indent=2)
+        gravar_json(self.caminho, {"ob": self.ob, "documentos": self.documentos})
 
     def concluir(self) -> None:
         obs = _obs_concluidas(self.pasta)
         if self.ob and self.ob not in obs:
             obs.append(self.ob)
         os.makedirs(self.pasta, exist_ok=True)
-        with open(os.path.join(self.pasta, ARQUIVO_PROGRESSO_CONCLUIDO), "w", encoding="utf-8") as arquivo:
-            json.dump({"obs": obs}, arquivo, ensure_ascii=False, indent=2)
+        gravar_json(os.path.join(self.pasta, ARQUIVO_PROGRESSO_CONCLUIDO), {"obs": obs})
         if os.path.exists(self.caminho):
             os.remove(self.caminho)
 

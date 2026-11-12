@@ -23,6 +23,7 @@ import json
 import os
 import time
 
+from automacoes.geral import gravar_json
 from automacoes.anexar import caminhos
 from automacoes.anexar.automacao import dados_processo, interacao
 
@@ -60,8 +61,7 @@ def salvar_sessao(**valores) -> None:
     sessao = carregar_sessao()
     sessao.update(valores)
     caminhos.garantir_pasta(CAMINHO_SESSAO)
-    with open(CAMINHO_SESSAO, "w", encoding="utf-8") as arquivo:
-        json.dump(sessao, arquivo, ensure_ascii=False, indent=2)
+    gravar_json(CAMINHO_SESSAO, sessao)
     interacao.avisar("sessao", sessao=interacao.resumo_da_sessao(sessao))
 
 

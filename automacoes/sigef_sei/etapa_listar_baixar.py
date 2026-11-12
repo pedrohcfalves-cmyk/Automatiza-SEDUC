@@ -60,7 +60,7 @@ from .preparar_navegador import (  # noqa: F401
     conectar_chrome,
     preparar_navegador,
 )
-from automacoes.geral import PASTA_DADOS, ano_sigef, url_sigef
+from automacoes.geral import PASTA_DADOS, ano_sigef, gravar_json, url_sigef
 
 from .documentos import descrever as descrever_documentos
 from .documentos import filtrar_pacote, normalizar_documentos
@@ -540,8 +540,7 @@ def salvar_sessao(**novos_valores) -> None:
     """Mescla os valores passados no arquivo de sessão (não apaga o resto)."""
     sessao = carregar_sessao()
     sessao.update(novos_valores)
-    with open(CAMINHO_SESSAO, "w", encoding="utf-8") as arquivo:
-        json.dump(sessao, arquivo, ensure_ascii=False, indent=2)
+    gravar_json(CAMINHO_SESSAO, sessao)
 
 
 def _sequencial_ob(ob: str) -> str:

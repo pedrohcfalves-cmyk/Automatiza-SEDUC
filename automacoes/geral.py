@@ -37,6 +37,14 @@ PRIMEIRO_ANO = 2020
 _ANO_NA_URL = re.compile(r"(sigef(?:hom)?\.sefin\.ro\.gov\.br/SIGEF)\d{4}/", re.IGNORECASE)
 
 
+def gravar_json(caminho: str, dados) -> None:
+    """Grava de forma atômica (temporário + os.replace): queda no meio não deixa o JSON pela metade."""
+    temporario = f"{caminho}.tmp"
+    with open(temporario, "w", encoding="utf-8") as arquivo:
+        json.dump(dados, arquivo, ensure_ascii=False, indent=2)
+    os.replace(temporario, caminho)
+
+
 def ler_config() -> dict:
     try:
         with open(CAMINHO_CONFIG, encoding="utf-8") as arquivo:
@@ -55,8 +63,7 @@ def gravar_config(**valores) -> None:
         else:
             config[chave] = valor
     os.makedirs(PASTA_DADOS, exist_ok=True)
-    with open(CAMINHO_CONFIG, "w", encoding="utf-8") as arquivo:
-        json.dump(config, arquivo, ensure_ascii=False, indent=2)
+    gravar_json(CAMINHO_CONFIG, config)
 
 
 def ano_atual() -> int:

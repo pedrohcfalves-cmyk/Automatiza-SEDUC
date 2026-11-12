@@ -35,6 +35,7 @@ import re
 import string
 from datetime import date, datetime
 
+from automacoes.geral import gravar_json
 from automacoes.anexar import caminhos
 
 CAMINHO_CONFIG = caminhos.ARQUIVO_CONFIGURACOES
@@ -161,8 +162,7 @@ def _ler_arquivo() -> dict:
 
 def _gravar(tudo: dict) -> None:
     caminhos.garantir_pasta(CAMINHO_CONFIG)
-    with open(CAMINHO_CONFIG, "w", encoding="utf-8") as arquivo:
-        json.dump(tudo, arquivo, ensure_ascii=False, indent=2)
+    gravar_json(CAMINHO_CONFIG, tudo)
 
 
 def config_ce() -> dict:

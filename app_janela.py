@@ -169,6 +169,7 @@ from automacoes.sigef_sei.etapa_listar_baixar import (  # noqa: E402
     normalizar_processo_sei,
     salvar_sessao,
 )
+from automacoes.geral import gravar_json  # noqa: E402
 from automacoes.sigef_sei import etapa_sei2  # noqa: E402
 from automacoes.sigef_sei.documentos import DOCUMENTOS, normalizar_documentos  # noqa: E402
 from automacoes.sigef_sei import metricas  # noqa: E402
@@ -193,8 +194,7 @@ def _gravar_config(**valores) -> None:
     config = _ler_config()
     config.update(valores)
     try:
-        with open(CAMINHO_CONFIG, "w", encoding="utf-8") as arquivo:
-            json.dump(config, arquivo, ensure_ascii=False, indent=2)
+        gravar_json(CAMINHO_CONFIG, config)
     except OSError:
         pass
 

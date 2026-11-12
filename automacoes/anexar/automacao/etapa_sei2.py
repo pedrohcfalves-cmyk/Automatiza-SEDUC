@@ -73,6 +73,7 @@ import unicodedata
 
 from playwright.sync_api import Error as PlaywrightError, TimeoutError as PlaywrightTimeoutError
 
+from automacoes.geral import gravar_json
 from automacoes.anexar.automacao import interacao
 from automacoes.anexar.automacao.utils import (
     PASTA_BASE,
@@ -1714,8 +1715,7 @@ class ProgressoSei:
     def marcar(self, chave: str, estado: str, **extra) -> None:
         self.documentos[chave] = {"estado": estado, **extra}
         os.makedirs(self.pasta, exist_ok=True)
-        with open(self.caminho, "w", encoding="utf-8") as arquivo:
-            json.dump({"lote": self.lote, "documentos": self.documentos}, arquivo, ensure_ascii=False, indent=2)
+        gravar_json(self.caminho, {"lote": self.lote, "documentos": self.documentos})
 
     def concluir(self, obs_do_lote=()) -> None:
         obs = _obs_concluidas(self.pasta)
@@ -1723,8 +1723,7 @@ class ProgressoSei:
             if ob and _sequencial_ob(ob) not in {_sequencial_ob(o) for o in obs}:
                 obs.append(ob)
         os.makedirs(self.pasta, exist_ok=True)
-        with open(os.path.join(self.pasta, ARQUIVO_PROGRESSO_CONCLUIDO), "w", encoding="utf-8") as arquivo:
-            json.dump({"obs": obs}, arquivo, ensure_ascii=False, indent=2)
+        gravar_json(os.path.join(self.pasta, ARQUIVO_PROGRESSO_CONCLUIDO), {"obs": obs})
         if os.path.exists(self.caminho):
             os.remove(self.caminho)
 
