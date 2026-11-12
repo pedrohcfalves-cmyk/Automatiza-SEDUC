@@ -42,6 +42,39 @@ def normalizar(valor) -> float:
     return float(_decimal_em_texto(valor))
 
 
+def digitar_valor_conferido(pagina, campo, valor_padronizado, tentativas=3, espera_ms=300, antes_ms=0):
+    """
+    Limpa o campo de valor do SIGEF, digita, lê de volta e compara. Lança RuntimeError se não bater.
+
+    Campo de valor de pagamento -- um erro aqui é grave. Dois cuidados:
+      1) O campo é LIMPO antes de cada tentativa (seleciona tudo e apaga): press_sequentially()
+         digita em cima do que já estiver lá e CONCATENARIA com o valor anterior.
+      2) Compara o VALOR numérico (normalizar), não o texto: o SIGEF devolve "3.258,50",
+         que nunca seria igual, letra a letra, ao valor_padronizado só-dígitos ("325850").
+    `antes_ms`: espera antes de cada tentativa (a tela que recarrega e apaga o que foi digitado).
+    """
+    esperado = normalizar(valor_padronizado)
+    ultimo = ""
+    for _ in range(tentativas):
+        if antes_ms:
+            pagina.wait_for_timeout(antes_ms)
+        campo.click()
+        campo.press("Control+A")
+        campo.press("Backspace")
+        campo.press_sequentially(valor_padronizado, delay=20)
+        pagina.wait_for_timeout(espera_ms)
+        ultimo = campo.input_value().strip()
+        try:
+            if ultimo and abs(normalizar(ultimo) - esperado) < 0.001:
+                return ultimo
+        except ValueError:
+            pass
+    raise RuntimeError(
+        f"O valor no SIGEF ficou '{ultimo}' em vez de {valor_padronizado}. "
+        "Nada foi confirmado; confira o campo e tente de novo."
+    )
+
+
 def reais(valor: float) -> str:
     """1234.5 -> '1.234,50' (o jeito que se escreve dinheiro no Brasil)."""
     return f"{valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")

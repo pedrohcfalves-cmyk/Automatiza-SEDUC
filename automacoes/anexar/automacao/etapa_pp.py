@@ -30,7 +30,6 @@ Banco, Agência e Conta aceitam letras, números e símbolos e são DIGITADOS
 (tecla por tecla), depois de limpar o campo.
 """
 import re
-from datetime import date
 
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
@@ -43,6 +42,7 @@ from automacoes.anexar.automacao.configuracoes import (
     problemas_pp,
     usa_conta_corrente,
 )
+from automacoes.geral import ano_sigef
 from automacoes.anexar.automacao.utils import (
     URL_SIGEF_PP,
     carregar_sessao,
@@ -87,7 +87,7 @@ def _incluir_pp(aba_sigef, context, nl: str, ce: str, conta_pp: str, config: dic
     None se não for possível gerar.
     """
     config = {**config_global(), **(config or config_pp())}
-    ano_atual = str(date.today().year)
+    ano_atual = str(ano_sigef())
 
     aba_sigef.locator("#txtUnidadeGestora").fill(config["unidade_gestora"])
     aba_sigef.locator("#txtGestao_SIGEFPesquisa").fill(config["gestao"])

@@ -64,7 +64,6 @@ Ponto de entrada usado pelo main.py:
 """
 import os
 import re
-from datetime import date
 from urllib.parse import urlparse
 
 from playwright.sync_api import (
@@ -74,6 +73,7 @@ from playwright.sync_api import (
 
 from automacoes.anexar.automacao import interacao, utils
 from automacoes.anexar.automacao.configuracoes import config_global, gestao_sem_zeros
+from automacoes.geral import ano_sigef
 from automacoes.anexar.automacao.utils import (
     PASTA_BASE,
     URL_SIGEF,
@@ -201,7 +201,7 @@ def _sequencial(numero: str) -> str:
 def _ano_da_pp(pp: str) -> str:
     """'2026PP039778' -> '2026'. Sem prefixo, o ano corrente (o mesmo que a Etapa PP usa)."""
     achado = re.match(r"^(\d{4})PP", (pp or "").strip(), re.IGNORECASE)
-    return achado.group(1) if achado else str(date.today().year)
+    return achado.group(1) if achado else str(ano_sigef())
 
 
 def _completar_numero(numero: str, sigla: str, ano: str) -> str:

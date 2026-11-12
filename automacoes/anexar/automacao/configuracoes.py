@@ -35,7 +35,7 @@ import re
 import string
 from datetime import date, datetime
 
-from automacoes.geral import gravar_json
+from automacoes.geral import ano_sigef, gravar_json
 from automacoes.anexar import caminhos
 
 CAMINHO_CONFIG = caminhos.ARQUIVO_CONFIGURACOES
@@ -279,7 +279,7 @@ def valores_do_modelo(dados: dict = None, processo: str = None) -> dict:
         "parcela": dados.get("parcela") or "",
         "escola": dados.get("escola") or "",
         "municipio": dados.get("municipio") or "",
-        "ano": str(date.today().year),
+        "ano": str(ano_sigef()),
         "mes": mes,
         "mes_nome": nome_mes(mes),
         "cnpj_cpf": dados.get("cnpj_cpf") or "",

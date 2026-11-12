@@ -18,6 +18,7 @@ from datetime import date
 
 from automacoes.anexar.automacao import interacao
 from automacoes.anexar.automacao.configuracoes import config_global
+from automacoes.anexar.automacao.valores import digitar_valor_conferido
 from automacoes.anexar.automacao.utils import URL_SIGEF_NL, normalizar, obter_ou_criar_aba, salvar_sessao
 
 
@@ -129,41 +130,9 @@ def _incluir_nl(aba_sigef, context, valor_padronizado: str, nota_empenho: str) -
     # espera e apaga o valor digitado. Por isso, além de esperar,
     # confere se o valor realmente ficou no campo -- se a página tiver
     # apagado, digita de novo (até 3 tentativas).
-    #
-    # Dois cuidados importantes aqui, porque é campo de valor de
-    # pagamento -- um erro nisso é grave:
-    #   1) O campo é LIMPO antes de cada tentativa (seleciona tudo e
-    #      apaga). press_sequentially() digita em cima do que já
-    #      estiver lá -- sem limpar antes, cada nova tentativa
-    #      CONCATENA com o valor anterior em vez de substituir.
-    #   2) A comparação usa normalizar() (compara o VALOR numérico),
-    #      não o texto cru -- o campo devolve o valor já formatado
-    #      pelo SIGEF (ex: "3.258,50"), que nunca seria igual, char a
-    #      char, ao valor_padronizado só-dígitos (ex: "325850").
-    campo_valor = aba_sigef.locator("#txtValorBrutoId")
-    valor_esperado = normalizar(valor_padronizado)
-    for tentativa in range(1, 4):
-        aba_sigef.wait_for_timeout(2000)
-        campo_valor.click()
-        campo_valor.press("Control+A")
-        campo_valor.press("Backspace")
-        campo_valor.press_sequentially(valor_padronizado, delay=20)
-        aba_sigef.wait_for_timeout(300)
-
-        valor_atual = campo_valor.input_value().strip()
-        try:
-            confere = bool(valor_atual) and abs(normalizar(valor_atual) - valor_esperado) < 0.001
-        except ValueError:
-            confere = False
-
-        if confere:
-            break
-        print(f"⚠️  O valor no SIGEF ficou errado ('{valor_atual}') -- o programa vai digitar de novo ({tentativa}/3)...")
-    else:
-        print(
-            f"⚠️  ATENÇÃO: não consegui conferir o valor {valor_padronizado} no SIGEF. "
-            "Quando o programa terminar, ABRA esta NL no SIGEF e confira o valor."
-        )
+    # (limpar antes e comparar o valor numérico: ver digitar_valor_conferido).
+    # Não conferiu em 3 tentativas = para aqui, ANTES de confirmar a NL.
+    digitar_valor_conferido(aba_sigef, aba_sigef.locator("#txtValorBrutoId"), valor_padronizado, antes_ms=2000)
 
     aba_sigef.locator("#btnRetencoesId").click()
     aba_sigef.locator("#menun4").click()

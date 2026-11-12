@@ -56,6 +56,7 @@ from automacoes.anexar.automacao.configuracoes import (
     tipo_credor,
 )
 from automacoes.geral import mascarar_cpf
+from automacoes.anexar.automacao.valores import digitar_valor_conferido
 from automacoes.anexar.automacao.utils import URL_SIGEF, obter_ou_criar_aba, salvar_sessao
 
 # Quanto esperar o SIGEF devolver o número da CE depois do "Incluir".
@@ -120,7 +121,8 @@ def incluir_documento_sigef(aba_sigef, valor_padronizado: str) -> str:
     """
     aba_sigef.bring_to_front()
 
-    aba_sigef.locator("#txtVlDocumento").press_sequentially(valor_padronizado)
+    # Limpa, digita e lê de volta: valor errado na CE não tem como desfazer depois do Incluir.
+    digitar_valor_conferido(aba_sigef, aba_sigef.locator("#txtVlDocumento"), valor_padronizado)
     aba_sigef.locator("#btnManutencao_BtnIncluir").click()
 
     ce = _ler_numero_ce(aba_sigef)
