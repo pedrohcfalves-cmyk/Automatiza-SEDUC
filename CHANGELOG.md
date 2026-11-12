@@ -81,6 +81,51 @@ instalador). Formato: [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/
   `teste_ce_impressao_janela.py` (a tela até o comando da automação) e
   `teste_ce_impressao_navegador.py` (Chromium real contra uma cópia da tela do SIGEF).
 
+### Corrigido (revisão de segurança dos fluxos — planos 002 a 023)
+- **O SEI abriu o processo certo?** Antes de anexar, o programa confere que a árvore que abriu é
+  a do processo pedido (SIGEF→SEI, NE e Gerar pagamento). Não sendo, para com "O SEI não abriu o
+  processo …" e nada é anexado.
+- **Segundo clique em Processar** (OB, NE e lotes) é recusado com "Já há uma automação em
+  andamento" em vez de enfileirar a mesma automação de novo.
+- **Arquivos de retomada e de configuração gravados de forma atômica** (`progresso_sei.json`,
+  `sessao_atual.json`, `config.json`): uma queda no meio da gravação não deixa mais o arquivo
+  pela metade.
+- **Retomada no SEI**: o "já salvo" guarda a impressão dos arquivos. Se numa nova tentativa os
+  arquivos do documento mudaram, o documento antigo continua sendo pulado (sem duplicar), mas
+  o aviso vai para a conferência final.
+- **Avisos do download** (NL com erro, CE não impressa) chegam à conferência final do SIGEF→SEI.
+- **Gerar pagamento**: trocar o número do processo não reaproveita mais CE/NL/PP/OB do processo
+  anterior; valor com ponto e sem vírgula (`1105.50`) vira erro em vez de ser lido como
+  110.550,00; o valor digitado na CE e na NL é lido de volta e, não conferindo, a automação
+  **para** antes de incluir/confirmar; PP, download e textos usam o exercício escolhido no
+  "Ano do SIGEF", não o ano do relógio.
+- **DARE**: CSV do histórico aberto no Excel (ou disco cheio) não derruba mais o lote — a linha
+  vai para `historico_reserva.csv`; célula com erro do Excel (`#N/A`, `#REF!`) na planilha vira
+  problema da linha em vez de usar o valor padrão; a limpeza da pasta só enxerga `DARE_*.pdf`.
+- **BB**: um segundo clique em Executar não apaga mais o "Parar" nem as respostas da execução
+  em andamento. Removido `encerrar_chrome`, que nunca era chamado e fecharia o Chrome do usuário.
+- **Janela**: não abre programas nem scripts (`.exe`, `.bat`, `.ps1`…) a pedido da página; um
+  evento com defeito não congela mais a tela; falha ao falar com o Python aparece na tela.
+- **CPF mascarado** (`***.456.789-**`) no registro do Gerar pagamento e no log do Cadastro.
+
+### Acessibilidade
+- Erros da automação são anunciados pelo leitor de tela (`role="alert"`), o "agora" é região
+  viva e, ao trocar de tela, o foco vai para o título.
+- Diálogos do Gerar pagamento e do Cadastro têm nome e devolvem o foco a quem abriu; a tabela
+  do DARE funciona pelo teclado (setas, Shift+setas, Espaço, Enter; cabeçalhos ordenam com
+  Enter); os ícones decorativos ficam fora do leitor de tela.
+
+### Para quem mexe no código
+- `python testes/rodar_tudo.py` roda todos os grupos de teste (e o GitHub roda a cada push:
+  `.github/workflows/testes.yml`). `requirements-dev.txt`.
+- `constraints.txt` trava as versões do ambiente de build; `requirements.txt` ganhou
+  `pyautogui`, `pyperclip` e `websocket-client` (o BB usa) e pisos novos de `pillow` e `pypdf`.
+- `instalador/construir.py` usa `--clean`, confere as bibliotecas do BB e **recusa gerar o
+  instalador se o CHANGELOG não tiver a seção da versão**; `_gerar_instalador.bat` devolve o
+  código de erro do build.
+- `testes/ferramentas/comparar_funcoes.py`: o que é igual e o que divergiu entre as duas
+  cópias de `etapa_sei2.py`.
+
 ## [3.9.0] - 2026-11-03
 
 ### Adicionado

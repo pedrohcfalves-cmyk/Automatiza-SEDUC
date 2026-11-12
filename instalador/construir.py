@@ -31,6 +31,11 @@ def ler_versao() -> str:
         return re.search(r'^VERSAO = "([^"]+)"', arquivo.read(), re.M).group(1)
 
 
+def changelog_tem_versao(texto: str, versao: str) -> bool:
+    """O CHANGELOG tem a seção `## [versao]`? (instalador sem notas da versão é erro de release)"""
+    return re.search(rf"^## \[{re.escape(versao)}\]", texto, re.M) is not None
+
+
 def escrever_versao_exe(versao: str) -> None:
     """Propriedades > Detalhes do .exe mostram a mesma versão da tela."""
     numeros = [int(n) for n in re.findall(r"\d+", versao)][:4]
@@ -71,7 +76,9 @@ def achar_iscc() -> str:
 def conferir_bibliotecas() -> None:
     faltando = []
     for modulo, pacote in (("PyInstaller", "pyinstaller"), ("webview", "pywebview"), ("playwright", "playwright"),
-                           ("psutil", "psutil"), ("openpyxl", "openpyxl")):
+                           ("psutil", "psutil"), ("openpyxl", "openpyxl"),
+                           # o BB importa dentro de try: sem eles o módulo falha em silêncio no .exe
+                           ("pyautogui", "pyautogui"), ("pyperclip", "pyperclip"), ("websocket", "websocket-client")):
         try:
             __import__(modulo)
         except ImportError:
@@ -88,6 +95,10 @@ def main() -> None:
     iscc = achar_iscc()
     versao = ler_versao()
     print(f"==> Versão {versao}")
+    with open(os.path.join(RAIZ, "CHANGELOG.md"), encoding="utf-8") as arquivo:
+        if not changelog_tem_versao(arquivo.read(), versao):
+            sys.exit(f"CHANGELOG.md não tem a seção ## [{versao}]. "
+                     "Escreva as notas da versão antes de gerar o instalador.")
 
     escrever_versao_exe(versao)
 
@@ -97,6 +108,7 @@ def main() -> None:
             sys.executable, "-m", "PyInstaller",
             os.path.join(PASTA, "app_janela.spec"),
             "--noconfirm",
+            "--clean",  # sem cache do build anterior: arquivo removido do código não vai junto
             "--distpath", os.path.join(RAIZ, "dist"),
             "--workpath", os.path.join(RAIZ, "build"),
         ],
