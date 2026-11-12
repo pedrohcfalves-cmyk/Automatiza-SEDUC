@@ -2703,40 +2703,6 @@ def localizar_chrome(cfg=None):
     return None
 
 
-def chrome_esta_rodando():
-    if os.name != "nt":
-        try:
-            saida = subprocess.run(["pgrep", "-f", "chrome"], capture_output=True, timeout=5)
-            return saida.returncode == 0
-        except Exception:
-            return False
-    try:
-        saida = subprocess.run(
-            ["tasklist", "/FI", "IMAGENAME eq chrome.exe", "/NH"],
-            capture_output=True, text=True, timeout=10,
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-        )
-        return "chrome.exe" in (saida.stdout or "").lower()
-    except Exception:
-        return False
-
-
-def encerrar_chrome():
-    if os.name != "nt":
-        subprocess.run(["pkill", "-f", "chrome"], capture_output=True, timeout=10)
-        time.sleep(2)
-        return True
-    try:
-        subprocess.run(["taskkill", "/F", "/IM", "chrome.exe", "/T"],
-                       capture_output=True, timeout=20,
-                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-        time.sleep(2.5)
-        return not chrome_esta_rodando()
-    except Exception as erro:
-        print(f"  {ico('alerta')} Não consegui encerrar o Chrome: {erro}")
-        return False
-
-
 def iniciar_chrome_debug(caminho_chrome, perfil_dedicado=False, abrir_url=URLS_ABERTURA,
                          espera=20):
     """Sobe o Chrome com a flag e espera a porta responder de verdade."""
