@@ -46,6 +46,18 @@ class DigitarValorConferido(unittest.TestCase):
     def test_campo_vazio(self):
         self.assertEqual(digitar_valor_conferido(PaginaFalsa(), CampoFalso(), "325850"), "3.258,50")
 
+    def test_campo_que_devolve_ponto_decimal_confere(self):
+        # se o SIGEF devolver '3258.50' (sem vírgula), é o mesmo valor: não pode parar a CE/NL à toa
+        campo = CampoFalso()
+        campo.input_value = lambda: f"{int(campo.digitos) / 100:.2f}" if campo.digitos else ""
+        self.assertEqual(digitar_valor_conferido(PaginaFalsa(), campo, "325850"), "3258.50")
+
+    def test_campo_com_ponto_decimal_e_valor_errado_para(self):
+        campo = CampoFalso("9", ignora_backspace=True)
+        campo.input_value = lambda: f"{int(campo.digitos) / 100:.2f}"
+        with self.assertRaises(RuntimeError):
+            digitar_valor_conferido(PaginaFalsa(), campo, "325850")
+
     def test_campo_ja_preenchido_e_limpo_antes(self):
         # sem limpar, "999" + "325850" viraria 9.993.258,50
         self.assertEqual(digitar_valor_conferido(PaginaFalsa(), CampoFalso("999"), "325850"), "3.258,50")

@@ -65,10 +65,14 @@ def digitar_valor_conferido(pagina, campo, valor_padronizado, tentativas=3, espe
         pagina.wait_for_timeout(espera_ms)
         ultimo = campo.input_value().strip()
         try:
-            if ultimo and abs(normalizar(ultimo) - esperado) < 0.001:
-                return ultimo
+            lido = normalizar(ultimo)
         except ValueError:
-            pass
+            try:
+                lido = float(ultimo)  # campo que devolve '3258.50' (ponto decimal, sem vírgula)
+            except ValueError:
+                continue
+        if ultimo and abs(lido - esperado) < 0.001:
+            return ultimo
     raise RuntimeError(
         f"O valor no SIGEF ficou '{ultimo}' em vez de {valor_padronizado}. "
         "Nada foi confirmado; confira o campo e tente de novo."
