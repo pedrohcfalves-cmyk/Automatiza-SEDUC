@@ -64,6 +64,7 @@ class TesteOrdemBancaria(Base):
         self.marcar_todas(".chk-login")
         self.p.click("#btn-login-ok")
         self.p.wait_for_selector("#tela-dados:not([hidden])")
+        self.p.wait_for_timeout(150)  # app.js seleciona "processo" 60 ms depois (ver a NE, abaixo)
 
     def test_evento_ruim_nao_derruba_os_seguintes(self):
         # "lote_inicio" sem itens faz o tratador lançar; o "erro" que vem depois tem que aparecer
@@ -143,6 +144,9 @@ class TesteNotaDeEmpenho(Base):
         self.marcar_todas(".ne-chk-login")
         self.p.click("#ne-btn-login-ok")
         self.p.wait_for_selector("#ne-p-dados:not([hidden])")
+        # ne.js seleciona o campo "processo" 60 ms depois de mostrar a tela; digitar antes disso
+        # joga o texto no campo errado (o teste falhava de vez em quando).
+        self.p.wait_for_timeout(150)
         self.assertEqual(self.passo_atual(), "dados")
 
     def passo_atual(self):
