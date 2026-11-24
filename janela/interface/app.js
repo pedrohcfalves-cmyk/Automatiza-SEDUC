@@ -20,6 +20,7 @@
     tipoOb: "",
     documentos: DOCUMENTOS.slice(), // os marcados quando o processo/lote começou
     modoCe: "pp", // de onde sai a CE: "pp" (de sempre) ou "impressao"
+    formatoSei: "imagem", // como entra no SEI: "imagem" (de sempre) ou "pdf" (Externo)
     tiposOb: {
       regularizacao: "OB - Ordem Bancária de Regularização",
       ordem_bancaria: "OB - Ordem Bancária",
@@ -504,6 +505,17 @@
       .forEach((r) => (r.checked = r.value === valor));
   }
 
+  // ---- Como salvar no SEI: imagem ou PDF (o mesmo nas abas Um processo e Vários)
+
+  const formatoEscolhido = () =>
+    (document.querySelector('input[name="formato-sei"]:checked') || {}).value === "pdf" ? "pdf" : "imagem";
+
+  function marcarFormato(formato) {
+    const valor = formato === "pdf" ? "pdf" : "imagem";
+    document.querySelectorAll('input[name="formato-sei"], input[name="formato-sei-lote"]')
+      .forEach((r) => (r.checked = r.value === valor));
+  }
+
   const tipoEscolhido = () => (document.querySelector('input[name="tipo-ob"]:checked') || {}).value || "";
 
   function marcarTipo(tipo) {
@@ -547,8 +559,8 @@
     let r;
     try {
       r = api
-        ? await api.processar($("in-processo").value, $("in-ob").value, tipo, docs, modoCeEscolhido())
-        : { ok: true, processo, ob: $("in-ob").value.trim().toUpperCase(), tipo_ob: tipo, documentos: docs, modo_ce: modoCeEscolhido() };
+        ? await api.processar($("in-processo").value, $("in-ob").value, tipo, docs, modoCeEscolhido(), formatoEscolhido())
+        : { ok: true, processo, ob: $("in-ob").value.trim().toUpperCase(), tipo_ob: tipo, documentos: docs, modo_ce: modoCeEscolhido(), formato_sei: formatoEscolhido() };
     } catch (erro) {
       r = { ok: false, erro: `Não consegui começar: ${erro && erro.message ? erro.message : erro}` };
     }
@@ -563,6 +575,7 @@
     estado.tipoOb = r.tipo_ob;
     estado.documentos = r.documentos || docs;
     estado.modoCe = r.modo_ce || modoCeEscolhido();
+    estado.formatoSei = r.formato_sei || formatoEscolhido();
     iniciarExecucao();
     if (!api) demo.processar();
   }
@@ -640,20 +653,22 @@
 
   const iniciarLote = (...args) => umEnvio($("btn-lote"), () => iniciarLoteAgora(...args));
 
-  async function iniciarLoteAgora(somenteLinhas, documentos, modoCe) {
+  async function iniciarLoteAgora(somenteLinhas, documentos, modoCe, formatoSei) {
     const docs = documentos || conferirDocumentos();
     if (!docs) return document.querySelector(".chk-doc").focus();
     const modo = modoCe || modoCeEscolhido();
+    const formato = formatoSei || formatoEscolhido();
     avisoDeEnvio("lote-erro-leitura", "");
     let r;
     try {
-      r = api ? await api.processar_lote(somenteLinhas || null, docs, modo) : { ok: true };
+      r = api ? await api.processar_lote(somenteLinhas || null, docs, modo, formato) : { ok: true };
     } catch (erro) {
       r = { ok: false, erro: `Não consegui começar: ${erro && erro.message ? erro.message : erro}` };
     }
     if (!r.ok) return avisoDeEnvio("lote-erro-leitura", r.erro || "");
     estado.documentos = docs;
     estado.modoCe = modo;
+    estado.formatoSei = formato;
     estado.modo = "lote";
     estado.lote.itens = [];
     iniciarExecucao();
@@ -666,7 +681,8 @@
     $("exec-ob").textContent = estado.ob;
     $("exec-tipo").textContent = estado.tiposOb[estado.tipoOb] || "—";
     $("exec-docs").textContent = descreverDocs(estado.documentos) +
-      (estado.modoCe === "impressao" && estado.documentos.includes("CE") ? " · CE pela tela de impressão" : "");
+      (estado.modoCe === "impressao" && estado.documentos.includes("CE") ? " · CE pela tela de impressão" : "") +
+      (estado.formatoSei === "pdf" ? " · como PDF (Externo)" : "");
     $("erro").hidden = true;
     $("resumo").hidden = true;
     $("conf-avisos").hidden = true;
@@ -748,7 +764,7 @@
       $("btn-parar-lote").textContent = "Vai parar ao fim deste processo";
     };
     $("btn-lote-refazer").onclick = () =>
-      iniciarLote(estado.lote.resultados.filter((r) => r.estado === "erro").map((r) => r.linha), estado.documentos, estado.modoCe);
+      iniciarLote(estado.lote.resultados.filter((r) => r.estado === "erro").map((r) => r.linha), estado.documentos, estado.modoCe, estado.formatoSei);
     $("btn-lote-relatorio").onclick = () => api && api.abrir_arquivo(estado.lote.relatorio);
     $("btn-lote-novo").onclick = () => {
       $("in-lista").value = "";
@@ -775,6 +791,9 @@
     document.querySelectorAll('input[name="modo-ce"], input[name="modo-ce-lote"]').forEach((r) =>
       r.addEventListener("change", () => marcarModoCe(r.value))
     );
+    document.querySelectorAll('input[name="formato-sei"], input[name="formato-sei-lote"]').forEach((r) =>
+      r.addEventListener("change", () => marcarFormato(r.value))
+    );
 
     $("btn-conf-ok").onclick = () => {
       fase("conf", "feita");
@@ -792,12 +811,12 @@
     $("btn-erro-voltar").onclick = irParaDados;
     $("btn-erro-continuar").onclick = async () => {
       if (estado.modo === "lote") {
-        if (!estado.lote.itens.length) return iniciarLote(null, estado.documentos, estado.modoCe); // parou antes de começar
+        if (!estado.lote.itens.length) return iniciarLote(null, estado.documentos, estado.modoCe, estado.formatoSei); // parou antes de começar
         const faltam = estado.lote.itens.filter((i) => i.estado !== "ok").map((i) => i.linha);
-        return faltam.length ? iniciarLote(faltam, estado.documentos, estado.modoCe) : irParaDados();
+        return faltam.length ? iniciarLote(faltam, estado.documentos, estado.modoCe, estado.formatoSei) : irParaDados();
       }
       if (api) {
-        const r = await api.processar(estado.processo, estado.ob, estado.tipoOb, estado.documentos, estado.modoCe);
+        const r = await api.processar(estado.processo, estado.ob, estado.tipoOb, estado.documentos, estado.modoCe, estado.formatoSei);
         if (!r.ok) return irParaDados();
       }
       iniciarExecucao();
@@ -832,6 +851,7 @@
     estado.tipoOb = inicial.tipo_ob;
     marcarTipo(inicial.tipo_ob);
     marcarModoCe(inicial.modo_ce);
+    marcarFormato(inicial.formato_sei);
     document.querySelectorAll('input[name="tipo-lote"]').forEach((r) => (r.checked = r.value === inicial.tipo_ob));
     mostrar("inicio");
   }

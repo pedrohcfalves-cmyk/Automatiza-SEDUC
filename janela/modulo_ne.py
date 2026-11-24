@@ -68,11 +68,25 @@ def _ne_para_tela(texto: str):
     return {"ne": ne, "completa": f"{etapa.ANO_SIGEF}NE{ne}"} if ne else None
 
 
+def _formato(valor) -> str:
+    """"imagem" (o de sempre) ou "pdf" (Externo com o PDF do SIGEF)."""
+    from automacoes.sigef_sei.sei_pdf import normalizar_formato
+
+    return normalizar_formato(valor)
+
+
+def _lembrar_formato(valor) -> str:
+    formato = _formato(valor)
+    _e.gravar_config(formato_sei_ne=formato)
+    return formato
+
+
 def _estado() -> dict:
     sessao = carregar_sessao()
     return {
         "ok": True, "versao": __version__, "pasta": PASTA_BASE, "ano": etapa.ANO_SIGEF, "tipo_sei": etapa.TEXTO_LINK_NE,
         "processo": sessao.get("processo") or "", "ne": sessao.get("ne") or "",
+        "formato_sei": _formato(_e.ler_config().get("formato_sei_ne")),
     }
 
 
@@ -89,10 +103,12 @@ def _processar(d: dict) -> dict:
     if not ne:
         return {"ok": False, "campo": "ne"}
     nome_arvore = (d.get("nome_arvore") or "").strip()[:50]  # 50: o limite do campo no SEI
+    formato = _lembrar_formato(d.get("formato_sei"))
     if not RESERVA.tentar():  # segundo clique: não enfileira a mesma NE de novo
         return dict(OCUPADA)
-    _e.trabalhador.comandos.put(("ne_processar", {"processo": processo, "ne": ne["ne"], "nome_arvore": nome_arvore}))
-    return {"ok": True, "processo": processo, "ne": ne["ne"], "ne_completa": ne["completa"]}
+    _e.trabalhador.comandos.put(("ne_processar", {"processo": processo, "ne": ne["ne"], "nome_arvore": nome_arvore,
+                                                  "formato": formato}))
+    return {"ok": True, "processo": processo, "ne": ne["ne"], "ne_completa": ne["completa"], "formato_sei": formato}
 
 
 def _ler() -> dict:
@@ -138,10 +154,11 @@ def _processar_lote(d: dict) -> dict:
         item.ja_concluida = etapa.ne_ja_concluida(item.processo, item.ne)
     if not itens:
         return {"ok": False, "erro": "A lista não tem nenhuma linha válida."}
+    formato = _lembrar_formato(d.get("formato_sei"))
     if not RESERVA.tentar():
         return dict(OCUPADA)
     _e.trabalhador.parar_lote.clear()
-    _e.trabalhador.comandos.put(("ne_lote", {"itens": itens}))
+    _e.trabalhador.comandos.put(("ne_lote", {"itens": itens, "formato": formato}))
     return {"ok": True, "quantidade": len(itens)}
 
 
@@ -235,7 +252,7 @@ def _apos_login(t) -> None:
     _garantir_url_certa(t.aba_sigef, DOMINIO_SIGEF, etapa.URL_SIGEF_NE, "SIGEF")
 
 
-def _processar_uma(t, processo: str, ne: str, nome_arvore: str = "") -> None:
+def _processar_uma(t, processo: str, ne: str, nome_arvore: str = "", formato: str = "imagem") -> None:
     t._garantir_conexao()
 
     def ao_etapa(nome, dados=None):
@@ -245,14 +262,14 @@ def _processar_uma(t, processo: str, ne: str, nome_arvore: str = "") -> None:
 
     # O relógio da NE para dentro de processar_ne, antes da conferência.
     t.aba_sigef, avisos, tempos = etapa.processar_ne(
-        t.context, t.aba_sigef, processo, ne, ao_etapa=ao_etapa, nome_arvore=nome_arvore
+        t.context, t.aba_sigef, processo, ne, ao_etapa=ao_etapa, nome_arvore=nome_arvore, formato=formato
     )
     _e.emitir("ne_conferencia", processo=processo, avisos=avisos)
     _e.esperar_resposta()  # a pessoa confere no SEI e clica em "Concluí a conferência"
     _e.emitir("ne_concluido", processo=processo, ne=ne, tempos=tempos)
 
 
-def _processar_lote_no_chrome(t, itens: list) -> None:
+def _processar_lote_no_chrome(t, itens: list, formato: str = "imagem") -> None:
     t._garantir_conexao()
     validos = [item for item in itens if item.valido]
     _e.emitir("ne_lote_inicio", itens=[_item_para_tela(item) for item in validos])
@@ -270,7 +287,7 @@ def _processar_lote_no_chrome(t, itens: list) -> None:
         _e.emitir("ne_etapa", etapa=nome)
 
     resultados, caminho = lote.processar_lote_ne(
-        t.context, t.aba_sigef, validos, deve_parar=t.parar_lote.is_set, ao_etapa=ao_etapa,
+        t.context, t.aba_sigef, validos, deve_parar=t.parar_lote.is_set, ao_etapa=ao_etapa, formato=formato,
     )
     _e.emitir(
         "ne_lote_fim", relatorio=caminho,

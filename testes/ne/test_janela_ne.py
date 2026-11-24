@@ -83,9 +83,10 @@ class TestPorta(Base):
 
     def test_processar_manda_ao_trabalhador(self):
         r = self.ne("processar", {"processo": "0029001947202667", "ne": "2026NE000123"})
-        self.assertEqual(r, {"ok": True, "processo": PROC, "ne": "000123", "ne_completa": "2026NE000123"})
+        self.assertEqual(r, {"ok": True, "processo": PROC, "ne": "000123", "ne_completa": "2026NE000123",
+                             "formato_sei": "imagem"})
         self.assertEqual(A.trabalhador.comandos.get_nowait(),
-                         ("ne_processar", {"processo": PROC, "ne": "000123", "nome_arvore": ""}))
+                         ("ne_processar", {"processo": PROC, "ne": "000123", "nome_arvore": "", "formato": "imagem"}))
         RESERVA.liberar()  # como se o Trabalhador tivesse terminado a primeira
         self.ne("processar", {"processo": PROC, "ne": "123", "nome_arvore": "  " + "x" * 60 + " "})
         self.assertEqual(A.trabalhador.comandos.get_nowait()[1]["nome_arvore"], "x" * 50)  # limite do SEI
@@ -190,15 +191,16 @@ class TestTrabalhador(Base):
     def test_uma_ne_ate_a_conferencia(self):
         dados = {"ne": "000001", "pasta_processo": _PASTA, "arquivos": [], "avisos_download": []}
 
-        def processar_falso(context, aba, processo, ne, ao_etapa=None, nome_arvore=""):
+        def processar_falso(context, aba, processo, ne, ao_etapa=None, nome_arvore="", formato="imagem"):
             self.assertEqual(nome_arvore, "Empenho 12")
+            self.assertEqual(formato, "pdf")
             ao_etapa("sigef")
             ao_etapa("sei", dados)
             return "aba nova", ["um aviso"], {"sigef": 1.0, "sei": 2.0, "total": 3.0}
 
         A._respostas.put("")  # a pessoa conclui a conferência
         with mock.patch.object(M.etapa, "processar_ne", processar_falso):
-            self.rodar(("ne_processar", {"processo": PROC, "ne": "000001", "nome_arvore": "Empenho 12"}))
+            self.rodar(("ne_processar", {"processo": PROC, "ne": "000001", "nome_arvore": "Empenho 12", "formato": "pdf"}))
 
         self.assertEqual(self.tipos(), ["ne_etapa", "ne_etapa", "ne_resumo", "ne_conferencia", "ne_concluido"])
         self.assertEqual(self.eventos[3][1]["avisos"], ["um aviso"])
@@ -215,7 +217,8 @@ class TestTrabalhador(Base):
     def test_lote(self):
         itens = M.lote.ler_texto_ne(LISTA)
 
-        def lote_falso(context, aba, validos, deve_parar=None, ao_etapa=None):
+        def lote_falso(context, aba, validos, deve_parar=None, ao_etapa=None, formato="imagem"):
+            self.assertEqual(formato, "pdf")
             resultados = [M.lote.ResultadoNE(i) for i in validos]
             ao_etapa(0, "sigef", resultados)
             ao_etapa(0, "sigef", resultados)  # tentativa repetida depois de uma queda
@@ -225,7 +228,7 @@ class TestTrabalhador(Base):
             return resultados, "lote.csv"
 
         with mock.patch.object(M.lote, "processar_lote_ne", lote_falso):
-            self.rodar(("ne_lote", {"itens": itens}))
+            self.rodar(("ne_lote", {"itens": itens, "formato": "pdf"}))
 
         self.assertEqual(self.tipos(), ["ne_lote_inicio", "ne_lote_item", "ne_etapa", "ne_etapa", "ne_etapa",
                                         "ne_lote_item", "ne_lote_fim"])

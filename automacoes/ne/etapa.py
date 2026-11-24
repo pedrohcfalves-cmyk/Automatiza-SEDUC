@@ -16,7 +16,9 @@ NO SIGEF  tela "Imprimir Nota de Empenho" -> Imprimir -> janela de formato
           -> PDF -> uma imagem PNG por página, na pasta do processo:
           "Nota de Empenho - NE 000123.png" (ou "..._1.png", "..._2.png").
 NO SEI    "Incluir Documento" -> "NE - Nota de Empenho", Restrito +
-          Documento Preparatório, imagens coladas no corpo.
+          Documento Preparatório, imagens coladas no corpo. Ou, no modo
+          PDF: "Externo" -> "NE - Nota de Empenho", Nato-digital, Público,
+          com o PDF do SIGEF (guardado ao lado das imagens).
 
 A NE é identificada pelo SEQUENCIAL com 6 dígitos ("000123"): é o que a
 tela do SIGEF pede. "2026NE000123" e "123" valem a mesma NE.
@@ -40,6 +42,7 @@ from automacoes.sigef_sei.etapa_listar_baixar import (
     campo_existe,
     carregar_sessao,
     fechar_janelas_sobrando,
+    guardar_pdf,
     ler_valor_campo,
     nome_pasta_valido,
     obter_ou_criar_aba,
@@ -54,6 +57,7 @@ from automacoes.sigef_sei.etapa_sei2 import (
     _procurar_lugar,
     ob_ja_concluida,
 )
+from automacoes.sigef_sei.sei_pdf import FORMATO_PDF, anexar_documento_pdf, normalizar_formato
 from automacoes.sigef_sei.preparar_navegador import DOMINIO_SEI, DOMINIO_SIGEF, aviso_conferencia_final
 
 from .metricas import CronometroNE
@@ -259,6 +263,8 @@ def _baixar_ne_uma_vez(context, aba_sigef, processo: str, ne: str):
 
     for velho in arquivos_da_ne(processo, ne):   # sobras de uma rodada com outro nº de páginas
         os.remove(velho)
+    # O PDF fica ao lado das imagens: é o que o modo PDF anexa no SEI (sei_pdf.py).
+    guardar_pdf(caminho_pdf, pasta, _prefixo(ne))
 
     avisos = []
     with pymupdf.open(caminho_pdf) as doc:
@@ -320,13 +326,15 @@ def baixar_ne(context, aba_sigef, processo: str, ne: str, reaproveitar: bool = T
 # --------------------------------------------------------------------- SEI
 
 
-def anexar_ne(context, processo: str, dados: dict, nome_arvore: str = "") -> list[str]:
+def anexar_ne(context, processo: str, dados: dict, nome_arvore: str = "", formato: str = "imagem") -> list[str]:
     """
-    Anexa as imagens da NE no processo do SEI e devolve os avisos da
-    rodada (documento vazio que sobrou de uma queda, divisão por
-    tamanho...). Sabe retomar: o que já foi salvo numa tentativa
-    anterior é pulado. `nome_arvore` vai no campo "Nome na Árvore" do
-    SEI (em branco, fica vazio).
+    Anexa a NE no processo do SEI e devolve os avisos da rodada
+    (documento vazio que sobrou de uma queda, divisão por tamanho...).
+    Sabe retomar: o que já foi salvo numa tentativa anterior é pulado.
+    `nome_arvore` vai no campo "Nome na Árvore" do SEI (em branco, fica
+    vazio). `formato`: "imagem" (as páginas coladas, o de sempre) ou
+    "pdf" (documento Externo "NE - Nota de Empenho" com o PDF do SIGEF,
+    ver automacoes/sigef_sei/sei_pdf.py).
     """
     ne, arquivos = dados["ne"], dados["arquivos"]
     if not arquivos:
@@ -356,11 +364,18 @@ def anexar_ne(context, processo: str, dados: dict, nome_arvore: str = "") -> lis
         reabrir.click()
         print(f"Processo estava arquivado -- cliquei em 'Reabrir Processo' (achado em '{lugar}').")
 
-    _anexar_documento(
-        context, aba_sei, progresso, avisos,
-        f"NE {ne}", f"NE {ne}", TEXTO_LINK_NE, "NE", arquivos,
-        numero_pp=NumeroSeExistir(ne), nome_arvore=(nome_arvore or "").strip(),
-    )
+    if normalizar_formato(formato) == FORMATO_PDF:
+        anexar_documento_pdf(
+            context, aba_sei, progresso, avisos, processo,
+            f"NE {ne}", f"NE {ne}", TEXTO_LINK_NE, "NE", arquivos,
+            numero_pp=ne, nome_arvore=(nome_arvore or "").strip(),
+        )
+    else:
+        _anexar_documento(
+            context, aba_sei, progresso, avisos,
+            f"NE {ne}", f"NE {ne}", TEXTO_LINK_NE, "NE", arquivos,
+            numero_pp=NumeroSeExistir(ne), nome_arvore=(nome_arvore or "").strip(),
+        )
     progresso.concluir()
     salvar_sessao(ne_download={})
     return avisos
@@ -382,7 +397,7 @@ def conferencia_final(processo: str, avisos) -> None:
 
 
 def processar_ne(context, aba_sigef, processo: str, ne: str, origem: str = "avulsa", ao_etapa=None,
-                 nome_arvore: str = ""):
+                 nome_arvore: str = "", formato: str = "imagem"):
     """
     Uma NE do começo ao fim (SIGEF e SEI), com a métrica gravada. O
     relógio para antes da conferência: o tempo da pessoa não entra.
@@ -399,7 +414,7 @@ def processar_ne(context, aba_sigef, processo: str, ne: str, origem: str = "avul
         dados, aba_sigef = baixar_ne(context, aba_sigef, processo, ne)
         cron.etapa("sei")
         ao_etapa("sei", dados)
-        avisos = anexar_ne(context, processo, dados, nome_arvore)
+        avisos = anexar_ne(context, processo, dados, nome_arvore, formato=formato)
     except BaseException as erro:
         texto = str(erro.code if isinstance(erro, SystemExit) else erro).strip()
         # Ctrl+C ou a janela fechada no meio (Encerrado, do app_janela): parou, não deu erro.

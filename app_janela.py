@@ -241,6 +241,22 @@ def _lembrar_modo_ce(valor) -> str:
     return modo
 
 
+# Como os documentos entram no SEI (passo 3): "imagem" (coladas no editor, o
+# de sempre) ou "pdf" (documento Externo com o PDF do SIGEF, sei_pdf.py).
+# A OB e a NE lembram cada uma a sua escolha (formato_sei / formato_sei_ne).
+def _formato_sei(valor) -> str:
+    from automacoes.sigef_sei.sei_pdf import normalizar_formato
+
+    return normalizar_formato(valor)
+
+
+def _lembrar_formato_sei(valor, chave: str = "formato_sei") -> str:
+    """A escolha válida (desconhecida ou ausente = "imagem"), gravada para a próxima vez."""
+    formato = _formato_sei(valor)
+    _gravar_config(**{chave: formato})
+    return formato
+
+
 # --------------------------------------------- input() vira pergunta na tela
 
 
@@ -390,7 +406,8 @@ class Trabalhador(threading.Thread):
             print("O navegador da automação tinha sido fechado -- abrindo de novo.")
             self._conectar()
 
-    def _processar(self, processo: str, ob: str, tipo_ob: str, documentos=None, ce_impressao=False) -> None:
+    def _processar(self, processo: str, ob: str, tipo_ob: str, documentos=None, ce_impressao=False,
+                   formato="imagem") -> None:
         self._garantir_conexao()
 
         salvar_sessao(processo=processo, ob=ob, tipo_ob=tipo_ob)
@@ -409,7 +426,7 @@ class Trabalhador(threading.Thread):
             cron.etapa("sei")
             ponte.emitir("etapa", etapa="sei")
             etapa_sei2.executar_sei2(
-                self.context, processo, dados=dados, tipo_ob=tipo_ob, documentos=documentos
+                self.context, processo, dados=dados, tipo_ob=tipo_ob, documentos=documentos, formato=formato
             )
         except Encerrado:
             cron.registrar("parado", dados=dados, mensagem="Janela fechada")
@@ -423,7 +440,7 @@ class Trabalhador(threading.Thread):
         tempos = cron.registrar("ok", dados=dados)
         ponte.emitir("concluido", processo=processo, ob=dados.get("ob", ob), tempos=tempos)
 
-    def _lote(self, itens: list, documentos=None, ce_impressao=False) -> None:
+    def _lote(self, itens: list, documentos=None, ce_impressao=False, formato="imagem") -> None:
         self._garantir_conexao()
         self.parar_lote.clear()
         validos = [item for item in itens if item.valido]
@@ -445,7 +462,7 @@ class Trabalhador(threading.Thread):
         resultados, relatorio = lote.processar_lote(
             self.context, self.aba_sigef, validos,
             ao_mudar=ao_mudar, deve_parar=self.parar_lote.is_set, ao_etapa=ao_etapa,
-            documentos=documentos, ce_impressao=ce_impressao,
+            documentos=documentos, ce_impressao=ce_impressao, formato=formato,
         )
         ponte.emitir(
             "lote_fim", relatorio=relatorio,
@@ -587,6 +604,7 @@ class Api:
             "tipo_ob": _chave_do_tipo(sessao.get("tipo_ob")),
             "tipos_ob": TIPOS_OB,
             "modo_ce": _modo_ce(_ler_config().get("modo_ce")),
+            "formato_sei": _formato_sei(_ler_config().get("formato_sei")),
         }
 
     def __init__(self):
@@ -616,7 +634,8 @@ class Api:
             return None
         return normalizar_documentos(documentos)
 
-    def processar(self, processo: str, ob: str, tipo_ob: str = None, documentos=None, modo_ce=None) -> dict:
+    def processar(self, processo: str, ob: str, tipo_ob: str = None, documentos=None, modo_ce=None,
+                  formato_sei=None) -> dict:
         normalizado = normalizar_processo_sei(processo or "")
         ob = (ob or "").strip().upper()
         if not normalizado:
@@ -629,14 +648,16 @@ class Api:
         if not escolhidos:
             return {"ok": False, "campo": "documentos"}
         modo_ce = _lembrar_modo_ce(modo_ce)
+        formato = _lembrar_formato_sei(formato_sei)
         if not RESERVA.tentar():  # segundo clique: não enfileira a mesma OB de novo
             return dict(OCUPADA)
         trabalhador.comandos.put(
             ("processar", {"processo": normalizado, "ob": ob, "tipo_ob": TIPOS_OB[tipo_ob],
-                           "documentos": list(escolhidos), "ce_impressao": modo_ce == "impressao"})
+                           "documentos": list(escolhidos), "ce_impressao": modo_ce == "impressao",
+                           "formato": formato})
         )
         return {"ok": True, "processo": normalizado, "ob": ob, "tipo_ob": tipo_ob,
-                "documentos": list(escolhidos), "modo_ce": modo_ce}
+                "documentos": list(escolhidos), "modo_ce": modo_ce, "formato_sei": formato}
 
     # ---- lote ----
 
@@ -673,7 +694,7 @@ class Api:
     def reler_lote(self, tipo_padrao: str) -> dict:
         return self._ler(tipo_padrao)
 
-    def processar_lote(self, somente_linhas=None, documentos=None, modo_ce=None) -> dict:
+    def processar_lote(self, somente_linhas=None, documentos=None, modo_ce=None, formato_sei=None) -> dict:
         """
         Roda a última lista lida. `somente_linhas` refaz só essas (os que
         deram erro). `documentos`: as caixas CE/NL/PP/OB marcadas.
@@ -692,10 +713,11 @@ class Api:
         if not itens:
             return {"ok": False}
         modo_ce = _lembrar_modo_ce(modo_ce)
+        formato = _lembrar_formato_sei(formato_sei)
         if not RESERVA.tentar():
             return dict(OCUPADA)
         trabalhador.comandos.put(("lote", {"itens": itens, "documentos": list(escolhidos),
-                                           "ce_impressao": modo_ce == "impressao"}))
+                                           "ce_impressao": modo_ce == "impressao", "formato": formato}))
         return {"ok": True, "quantidade": len(itens)}
 
     def parar_lote(self) -> None:

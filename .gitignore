@@ -41,6 +41,8 @@ python-embutido/
 
 # Sobras de compilacao do lancador
 lancador/*.o
+# O lançador compilado (lancador/COMPILAR.md gera na raiz): binário, não é código
+/AUTOMACAO SIGEF-SEI.exe
 
 # Saída do PyInstaller e do Inno Setup (instalador/construir.py)
 build/
@@ -82,6 +84,10 @@ debug_html/
 # com o login do Windows. Normalmente ficam em Documentos\Automacao
 # SIGEF-SEI, mas LBA_PASTA_DADOS pode apontar pra cá.
 diagnostico_salvar.log
+# Pastas de diagnóstico da CE pela tela de impressão e do modo PDF (Externo):
+# relatório .txt, foto .png e HTML da tela, com processos e o infra_hash do SEI
+diagnostico_ce/
+diagnostico_pdf/
 falha_editor_*.png
 registro_*.txt
 construir_log.txt

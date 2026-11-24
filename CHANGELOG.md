@@ -18,6 +18,23 @@ instalador). Formato: [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/
   pelo `/json` do Chrome, sem tocar no resto.
 
 ### Adicionado
+- **Como salvar no SEI: Como imagem ou Como PDF** (passo 3 do Anexar no SEI e da Nota de
+  Empenho, nas abas de um e de vários). "Como imagem" é o caminho de sempre. "Como PDF" inclui
+  cada documento como **Externo** (`escolher(-1)`), com o PDF do SIGEF: tipo no `#selSerie`
+  (CE → Despesa Certificada, NL → NL - Nota de Lançamento, PP → PP - Preparação de Pagamento,
+  OB → OB - Ordem Bancária de Regularização ou Ordem Bancária, conforme a escolha da OB,
+  NE → NE - Nota de Empenho), data de hoje, Nato-digital, Público, Número da PP/NE e Nome na
+  árvore da NE quando a tela tiver o campo. Um Externo por documento, como no modo imagem.
+  Lembrado em `config.json` (`formato_sei` e `formato_sei_ne`). Código em
+  `automacoes/sigef_sei/sei_pdf.py`; o download agora guarda o PDF do SIGEF ao lado das
+  imagens (`guardar_pdf`); download antigo sem PDF → o PDF é montado com as imagens, com aviso.
+  Retomada no mesmo `progresso_sei.json`; falha antes do Salvar é repetida sozinha, depois do
+  Salvar não (poderia duplicar). Diagnóstico em `diagnostico_pdf.log` e na pasta
+  `diagnostico_pdf` (passo, erro, mensagens do SEI, frames, opções do `#selSerie`, foto e HTML);
+  teste da tela sem salvar: `python -m automacoes.sigef_sei.diagnostico_pdf <processo>`.
+  Testes: `testes/teste_sei_pdf_navegador.py` (Chromium contra cópia do SEI: 6 documentos,
+  regularização, retomada, PDF montado, clique perdido, arrastar e soltar, arquivo recusado,
+  Salvar que não responde, NE) e `testes/teste_formato_sei_janela.py` (tela → API → comando).
 - **Entrar nos sistemas antes de começar** no DARE e no Banco do Brasil, no modelo do Anexar
   no SEI e da NE: abre o Chrome só com as abas da automação, pede "Entrei no …" e "Conferi a
   minha gerência no SEI" e só então começa (`central.js`, `lbaLogin`; `modulo_geral`:

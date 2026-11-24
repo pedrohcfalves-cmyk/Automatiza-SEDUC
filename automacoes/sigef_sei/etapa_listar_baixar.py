@@ -206,9 +206,26 @@ def nome_pasta_valido(nome: str) -> str:
     return nome.strip()
 
 
+def guardar_pdf(caminho_pdf: str, pasta_destino: str, nome_arquivo: str) -> str:
+    """
+    Copia o PDF baixado do SIGEF para "{nome_arquivo}.pdf", ao lado das
+    imagens: é o arquivo que o modo PDF (sei_pdf.py) anexa no SEI. Falhar
+    aqui não para o download -- o modo PDF monta o PDF com as imagens.
+    """
+    destino = os.path.join(pasta_destino, f"{nome_arquivo}.pdf")
+    try:
+        if os.path.abspath(caminho_pdf) != os.path.abspath(destino):
+            shutil.copyfile(caminho_pdf, destino)
+    except OSError as erro:
+        print(f"   ⚠️  Não consegui guardar o PDF {os.path.basename(destino)} ({erro}); seguem as imagens.")
+        return ""
+    return destino
+
+
 def pdf_para_jpg(caminho_pdf: str, pasta_destino: str, nome_arquivo: str) -> list[str]:
-    """Converte cada página do PDF em um JPG e salva na pasta destino."""
+    """Converte cada página do PDF em um JPG e salva na pasta destino (e guarda o PDF junto)."""
     os.makedirs(pasta_destino, exist_ok=True)
+    guardar_pdf(caminho_pdf, pasta_destino, nome_arquivo)
     caminhos_gerados = []
     # O "with" fecha o PDF mesmo se uma página falhar (o arquivo não fica
     # preso e não sobra o documento inteiro na memória).

@@ -549,7 +549,7 @@ class TestaNomesUsadosPorFora(unittest.TestCase):
 
         self.assertEqual(parametros("executar_sei2"),
                          ["context", "processo", "dados", "tipo_ob", "conferir_no_fim", "avisos_saida",
-                          "documentos"])
+                          "documentos", "formato"])  # formato: "imagem" (padrão) ou "pdf" (sei_pdf.py)
         self.assertEqual(parametros("ob_ja_concluida"), ["processo", "ob", "pasta_base"])
         self.assertEqual(parametros("_anexar_documento"),
                          ["context", "aba_sei", "progresso", "avisos", "chave", "descricao", "texto_link",

@@ -29,6 +29,8 @@ GRUPOS = {
     "ce_impressao_janela": PY + ["testes/teste_ce_impressao_janela.py"],
     "ce_impressao_navegador": PY + ["testes/teste_ce_impressao_navegador.py"],
     "ne_cenarios": PY + ["testes/ne/rodar_cenarios.py"],
+    "sei_pdf_navegador": PY + ["testes/teste_sei_pdf_navegador.py"],   # modo "Como PDF" (Externo)
+    "formato_sei_janela": PY + ["testes/teste_formato_sei_janela.py"],
     "anexar": PYTEST + ["testes/anexar"],      # ~10 min
     "cadastro": PYTEST + ["testes/cadastro"],  # só acha Chromium no Linux; no Windows os testes de navegador pulam
 }

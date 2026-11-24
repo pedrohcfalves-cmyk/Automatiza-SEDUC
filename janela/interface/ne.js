@@ -57,6 +57,17 @@
 
   const semPython = () => DEMONSTRACAO && !(g && g.api());
 
+  // ---- Como salvar no SEI: imagem (de sempre) ou PDF (Externo); o mesmo nas duas abas
+
+  const formatoEscolhido = () =>
+    (document.querySelector('input[name="ne-formato-sei"]:checked') || {}).value === "pdf" ? "pdf" : "imagem";
+
+  function marcarFormato(formato) {
+    const valor = formato === "pdf" ? "pdf" : "imagem";
+    document.querySelectorAll('input[name="ne-formato-sei"], input[name="ne-formato-sei-lote"]')
+      .forEach((r) => (r.checked = r.value === valor));
+  }
+
   // ------------------------------------------------------------ Telas
 
   // Nos passos do topo: o fim do lote fica na Conferência; a NE concluída marca todos.
@@ -87,6 +98,7 @@
     document.querySelectorAll("[data-ne-tipo]").forEach((el) => (el.textContent = e.tipo_sei));
     if (!$("ne-in-processo").value) $("ne-in-processo").value = e.processo || "";
     if (!$("ne-in-ne").value) $("ne-in-ne").value = e.ne || "";
+    marcarFormato(e.formato_sei);
   }
 
   // ------------------------------------------------------ Andamento
@@ -134,7 +146,7 @@
       }
     } else if (s.fase === "sei") {
       if (/(📄|⏭️)\s+NE/.test(t)) {
-        fase("sei", "ativa", /⏭️/.test(t) ? "NE (já feita)" : "Colando as páginas");
+        fase("sei", "ativa", /⏭️/.test(t) ? "NE (já feita)" : /\(PDF/.test(t) ? "Enviando o PDF (Externo)" : "Colando as páginas");
         barra(70);
       } else if (/Tentando de novo no mesmo documento/.test(t)) {
         fase("sei", "ativa", "Internet instável — tentando de novo");
@@ -388,10 +400,12 @@
     if (!v.processo) return $("ne-in-processo").focus();
     if (!v.ne) return $("ne-in-ne").focus();
     const nomeArvore = $("ne-in-arvore").value.trim();
-    const r = await chamar("processar", { processo: $("ne-in-processo").value, ne: $("ne-in-ne").value, nome_arvore: nomeArvore });
+    const formato = formatoEscolhido();
+    const r = await chamar("processar", { processo: $("ne-in-processo").value, ne: $("ne-in-ne").value, nome_arvore: nomeArvore, formato_sei: formato });
     if (!r.ok) return r.campo ? $(`ne-in-${r.campo}`).focus() : avisoDeEnvio("ne-dados-erro", r.erro || "Não consegui começar. Tente de novo.");
     s.modo = "um";
     s.nomeArvore = nomeArvore;
+    s.formatoSei = r.formato_sei || formato;
     s.processo = r.processo;
     s.ne = r.ne_completa;
     iniciarExecucao();
@@ -465,9 +479,11 @@
 
   async function iniciarLoteAgora(linhas) {
     avisoDeEnvio("ne-lote-erro-leitura", "");
-    const r = await chamar("processar_lote", { linhas: linhas || null });
+    const formato = linhas && s.formatoSei ? s.formatoSei : formatoEscolhido();
+    const r = await chamar("processar_lote", { linhas: linhas || null, formato_sei: formato });
     if (!r.ok) return avisoDeEnvio("ne-lote-erro-leitura", r.erro || "");
     s.modo = "lote";
+    s.formatoSei = formato;
     s.lote.itens = [];
     iniciarExecucao("Lote · começando");
     if (semPython()) DEMO.lote();
@@ -503,6 +519,9 @@
       irParaDados();
     };
 
+    document.querySelectorAll('input[name="ne-formato-sei"], input[name="ne-formato-sei-lote"]').forEach((r) =>
+      r.addEventListener("change", () => marcarFormato(r.value))
+    );
     $("ne-aba-um").onclick = () => escolherAba("um");
     $("ne-aba-lote").onclick = () => escolherAba("lote");
     $("ne-form").addEventListener("submit", processar);
@@ -555,7 +574,7 @@
         const faltam = s.lote.itens.filter((i) => i.estado !== "ok").map((i) => i.linha);
         return faltam.length ? iniciarLote(faltam) : irParaDados();
       }
-      const r = await chamar("processar", { processo: s.processo, ne: s.ne, nome_arvore: s.nomeArvore || "" });
+      const r = await chamar("processar", { processo: s.processo, ne: s.ne, nome_arvore: s.nomeArvore || "", formato_sei: s.formatoSei || formatoEscolhido() });
       if (!r.ok) return irParaDados();
       iniciarExecucao();
       if (semPython()) DEMO.processar();

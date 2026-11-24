@@ -302,6 +302,23 @@
           </div>
         </div>
 
+        <fieldset class="campo campo-formato-sei">
+          <legend>Como salvar no SEI</legend>
+          <div class="opcoes-tipo">
+            <label class="opcao">
+              <input type="radio" name="formato-sei" value="imagem" checked>
+              <span class="radio"></span>
+              <span class="texto"><b>Como imagem</b><small>O caminho de sempre: as páginas coladas no documento</small></span>
+            </label>
+            <label class="opcao">
+              <input type="radio" name="formato-sei" value="pdf">
+              <span class="radio"></span>
+              <span class="texto"><b>Como PDF</b><small>Documento Externo com o PDF do SIGEF: Nato-digital, Público, data de hoje</small></span>
+            </label>
+          </div>
+          <div class="dica">No PDF, cada documento (CE, NL, PP, OB) entra como Externo no tipo dele. O programa lembra a última escolha.</div>
+        </fieldset>
+
         <fieldset class="campo campo-modo-ce">
           <legend>Como listar e imprimir a CE</legend>
           <div class="opcoes-tipo">
@@ -356,6 +373,23 @@
           <textarea id="in-lista" rows="6" spellcheck="false" placeholder="0029.001947/2026-67    2026OB136475    Regularização&#10;0029.001948/2026-11    136476          Ordem Bancária"></textarea>
           <div class="dica">Uma OB por linha: o processo, a OB e, se quiser, o tipo (<code>Regularização</code> ou <code>Ordem Bancária</code>). Pode colar direto do Excel; a ordem das colunas e o cabeçalho não importam.</div>
         </div>
+
+        <fieldset class="campo campo-formato-sei">
+          <legend>Como salvar no SEI</legend>
+          <div class="opcoes-tipo">
+            <label class="opcao">
+              <input type="radio" name="formato-sei-lote" value="imagem" checked>
+              <span class="radio"></span>
+              <span class="texto"><b>Como imagem</b><small>O caminho de sempre: as páginas coladas no documento</small></span>
+            </label>
+            <label class="opcao">
+              <input type="radio" name="formato-sei-lote" value="pdf">
+              <span class="radio"></span>
+              <span class="texto"><b>Como PDF</b><small>Documento Externo com o PDF do SIGEF: Nato-digital, Público, data de hoje</small></span>
+            </label>
+          </div>
+          <div class="dica">No PDF, cada documento (CE, NL, PP, OB) entra como Externo no tipo dele. O programa lembra a última escolha.</div>
+        </fieldset>
 
         <fieldset class="campo campo-modo-ce">
           <legend>Como listar e imprimir a CE</legend>
@@ -643,6 +677,22 @@
             <input id="ne-in-arvore" maxlength="50" placeholder="Ex.: Empenho do contrato 12/2026" spellcheck="false">
             <div class="dica">Vai no campo “Nome na Árvore” do SEI, ao lado de “NE - Nota de Empenho”. Em branco, o campo fica vazio. Até 50 caracteres.</div>
           </div>
+          <fieldset class="campo campo-formato-sei">
+            <legend>Como salvar no SEI</legend>
+            <div class="opcoes-tipo">
+              <label class="opcao">
+                <input type="radio" name="ne-formato-sei" value="imagem" checked>
+                <span class="radio"></span>
+                <span class="texto"><b>Como imagem</b><small>O caminho de sempre: as páginas coladas no documento</small></span>
+              </label>
+              <label class="opcao">
+                <input type="radio" name="ne-formato-sei" value="pdf">
+                <span class="radio"></span>
+                <span class="texto"><b>Como PDF</b><small>Externo “NE - Nota de Empenho” com o PDF do SIGEF: Nato-digital, Público, data de hoje</small></span>
+              </label>
+            </div>
+            <div class="dica">O programa lembra a última escolha.</div>
+          </fieldset>
           <p class="erro-leitura" id="ne-dados-erro" role="alert" hidden></p>
           <div class="acao linha">
             <button class="btn primario grande" id="ne-btn-processar" type="submit">Baixar e anexar <svg class="ic" aria-hidden="true"><use href="#i-seta"/></svg></button>
@@ -660,6 +710,22 @@
             <textarea id="ne-in-lista" rows="6" spellcheck="false" placeholder="0029.001947/2026-67    2026NE000123&#10;0029.001948/2026-11    000124"></textarea>
             <div class="dica">Uma NE por linha: o processo e a NE (<code>2026NE000123</code>, ou só o número com os zeros: <code>000123</code>). Numa planilha com a coluna “NE”, vale o número sem zeros. A ordem das colunas não importa.</div>
           </div>
+          <fieldset class="campo campo-formato-sei">
+            <legend>Como salvar no SEI</legend>
+            <div class="opcoes-tipo">
+              <label class="opcao">
+                <input type="radio" name="ne-formato-sei-lote" value="imagem" checked>
+                <span class="radio"></span>
+                <span class="texto"><b>Como imagem</b><small>O caminho de sempre: as páginas coladas no documento</small></span>
+              </label>
+              <label class="opcao">
+                <input type="radio" name="ne-formato-sei-lote" value="pdf">
+                <span class="radio"></span>
+                <span class="texto"><b>Como PDF</b><small>Externo “NE - Nota de Empenho” com o PDF do SIGEF: Nato-digital, Público, data de hoje</small></span>
+              </label>
+            </div>
+            <div class="dica">O programa lembra a última escolha.</div>
+          </fieldset>
           <div class="previa" id="ne-lote-previa" hidden>
             <div class="previa-cab"><h3><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg>Conferência da lista</h3><span class="nota" id="ne-lote-contagem"></span></div>
             <div class="previa-rolagem">

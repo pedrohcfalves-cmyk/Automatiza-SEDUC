@@ -293,7 +293,7 @@ class Relatorio:
 
 def processar_lote(
     context, aba_sigef, itens: list[ItemLote], ao_mudar=None, deve_parar=None, ao_etapa=None,
-    documentos=None, ce_impressao: bool = False,
+    documentos=None, ce_impressao: bool = False, formato: str = "imagem",
 ) -> tuple[list[Resultado], str]:
     """
     Processa os itens válidos, um por vez. Devolve (resultados, caminho
@@ -310,6 +310,7 @@ def processar_lote(
     `documentos` (ver documentos.py): os tipos marcados na janela, os
     mesmos para todos os processos da lista. None é todos.
     `ce_impressao`: a CE sai pela tela de impressão (baixar_documentos).
+    `formato`: "imagem" ou "pdf" -- como os documentos entram no SEI (executar_sei2).
     """
     avisar = ao_mudar or (lambda indice, resultado: None)
     etapa = ao_etapa or (lambda nome, **dados: None)
@@ -352,6 +353,7 @@ def processar_lote(
                 executar_sei2(
                     context, item.processo, dados=dados, tipo_ob=item.tipo_ob,
                     conferir_no_fim=False, avisos_saida=avisos, documentos=documentos,
+                    formato=formato,
                 )
                 if item.ja_concluida:
                     avisos.insert(0, AVISO_JA_ANEXADA)

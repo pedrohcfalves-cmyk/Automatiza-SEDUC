@@ -243,13 +243,14 @@ class RelatorioNE:
 
 
 def processar_lote_ne(
-    context, aba_sigef, itens: list[ItemNE], deve_parar=None, ao_etapa=None
+    context, aba_sigef, itens: list[ItemNE], deve_parar=None, ao_etapa=None, formato: str = "imagem",
 ) -> tuple[list[ResultadoNE], str]:
     """
     Processa os itens válidos, um por vez. Devolve (resultados, caminho do
     relatório). `deve_parar()`, se informado, é consultado entre um item e
     outro: devolvendo True, o lote para ali (o item em andamento termina).
     `ao_etapa(indice, etapa, resultados)` avisa a tela: "sigef", "sei", "fim".
+    `formato`: "imagem" ou "pdf" -- como a NE entra no SEI (anexar_ne).
     """
     ao_etapa = ao_etapa or (lambda indice, etapa, resultados: None)
     resultados = [ResultadoNE(item) for item in itens if item.valido]
@@ -279,7 +280,7 @@ def processar_lote_ne(
                 resultado.pasta = dados.get("pasta_processo") or ""
                 cron.etapa("sei")
                 ao_etapa(indice, "sei", resultados)
-                avisos = anexar_ne(context, item.processo, dados)
+                avisos = anexar_ne(context, item.processo, dados, formato=formato)
                 if item.ja_concluida:
                     avisos.insert(0, AVISO_JA_ANEXADA)
                 resultado.estado, resultado.mensagem, resultado.avisos = "ok", "", avisos

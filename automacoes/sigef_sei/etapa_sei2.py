@@ -2230,7 +2230,7 @@ def _tem_arquivo(dados: dict) -> bool:
 
 def executar_sei2(
     context, processo: str, dados: dict = None, tipo_ob: str = None,
-    conferir_no_fim: bool = True, avisos_saida: list = None, documentos=None,
+    conferir_no_fim: bool = True, avisos_saida: list = None, documentos=None, formato: str = "imagem",
 ):
     """
     Segunda metade do fluxo: pega o que a etapa_listar_baixar.py baixou
@@ -2274,8 +2274,17 @@ def executar_sei2(
     usuário deixou marcados na janela. None é todos, como sempre foi. Os
     não marcados são simplesmente pulados; a ordem dos marcados não muda.
 
+    `formato` ("Como salvar no SEI", passo 3): "imagem" é o de sempre
+    (imagens coladas no editor); "pdf" inclui cada documento como Externo
+    com o PDF do SIGEF -- Nato-digital, Público, data de hoje -- no tipo
+    correspondente (ver sei_pdf.SERIES_EXTERNO). A ordem, a retomada e
+    um documento por CE/PP são os mesmos.
+
     Retorna a aba do SEI (Page).
     """
+    from .sei_pdf import FORMATO_PDF, anexar_documento_pdf, normalizar_formato
+
+    formato = normalizar_formato(formato)
     if tipo_ob is None:
         tipo_ob = carregar_sessao().get("tipo_ob") or TEXTO_LINK_OB_REGULARIZACAO
 
@@ -2319,7 +2328,7 @@ def executar_sei2(
         f"\nArquivos vindos da etapa anterior (origem: {pacote['origem']}): "
         f"CE {len(grupos_ce)} documento(s) | OB {len(arquivos_ob)} | "
         f"NL {len(grupos_nl)} documento(s) | PP {len(grupos_pp)} documento(s) "
-        f"-- {total} imagem(ns) no total."
+        f"-- {total} imagem(ns) no total" + (" (vão como PDF)." if normalizar_formato(formato) == FORMATO_PDF else ".")
     )
 
     # Os tipos marcados são esperados; faltar algum é aviso, não erro --
@@ -2376,7 +2385,13 @@ def executar_sei2(
     # Um documento por vez, cada um sabendo retomar (ver _anexar_documento).
     # A ordem é a de sempre: CE, NL (1 por PP), PP (1 por PP), OB.
     def anexar(*args, **kwargs):
-        _anexar_documento(context, aba_sei, progresso, avisos, *args, **kwargs)
+        if formato == FORMATO_PDF:
+            anexar_documento_pdf(context, aba_sei, progresso, avisos, processo, *args, **kwargs)
+        else:
+            _anexar_documento(context, aba_sei, progresso, avisos, *args, **kwargs)
+
+    if formato == FORMATO_PDF:
+        print("\n📎 Modo PDF: cada documento entra como Externo (Nato-digital, Público), com o PDF do SIGEF.")
 
     # ---- CE (Despesa Certificada) -- um documento por CE DISTINTA baixada,
     #      no mesmo estilo da NL e da PP (a mesma CE reaproveitada por
